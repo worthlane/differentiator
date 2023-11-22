@@ -6,31 +6,67 @@
 #include "common/errors.h"
 #include "common/file_read.h"
 
-typedef char* node_data_t;
-#ifdef PRINT_NODE
-#undef PRINT_NODE
-#endif
-#define PRINT_NODE "\"%s\""
+enum class DataType
+{
+    VARIABLE,
+    OPERATOR,
+    NUMBER,
 
-static const node_data_t ROOT_DATA = "unknown";
+    PZN,
+};
+
+enum class Operators
+{
+    ADD,
+    SUB,
+    MUL,
+    DIV,
+
+    UNK
+};
+
+union DataValue
+{
+    double      value;
+    Operators   operation;
+    int         variable;
+};
+
+static const DataType  DEFAULT_TYPE  = DataType::NUMBER;
+static const DataValue DEFAULT_VALUE = {0};
 
 struct Node
 {
     Node* parent;
 
-    node_data_t data;
+    DataType  type;
+    DataValue value;
 
     Node* left;
     Node* right;
 };
 
+struct VariableInfo
+{
+    char*  variable_name;
+    bool   isfree;
+    double value;
+};
+
+typedef struct VariableInfo variable_t;
+
+static const size_t MAX_VARIABLES_AMT = 50;
+static const size_t MAX_VARIABLE_LEN = 100;
+
 struct Tree
 {
     Node* root;
+
+    variable_t* vars;
 };
 typedef struct Tree tree_t;
 
-enum class TreeErrors
+enum class DiffErrors
 {
     NONE = 0,
 
@@ -39,6 +75,9 @@ enum class TreeErrors
     INVALID_SYNTAX,
     CYCLED_NODE,
     COMMON_HEIR,
+    UNKNOWN_INPUT,
+    WRONG_EQUATION,
+    UNKNOWN_OPERATION,
 
     UNKNOWN
 };
@@ -49,7 +88,7 @@ int PrintTreeError(FILE* fp, const void* err, const char* func, const char* file
 #endif
 #define EXIT_IF_TREE_ERROR(error)         do                                                            \
                                             {                                                           \
-                                                if ((error)->code != (int) TreeErrors::NONE)            \
+                                                if ((error)->code != (int) DiffErrors::NONE)            \
                                                 {                                                       \
                                                     return LogDump(PrintTreeError, error, __func__,     \
                                                                     __FILE__, __LINE__);                \
@@ -60,13 +99,14 @@ int PrintTreeError(FILE* fp, const void* err, const char* func, const char* file
 #endif
 #define RETURN_IF_TREE_ERROR(error)       do                                                            \
                                             {                                                           \
-                                                if ((error) != TreeErrors::NONE)                        \
+                                                if ((error) != DiffErrors::NONE)                        \
                                                 {                                                       \
                                                     return error;                                       \
                                                 }                                                       \
                                             } while(0)
 
-Node* NodeCtor(const node_data_t data, Node* left, Node* right, Node* parent, error_t* error);
+Node* NodeCtor(const DataType type, const DataValue value,
+               Node* left, Node* right, Node* parent, error_t* error);
 void  NodeDtor(Node* node);
 int   NodeDump(FILE* fp, const void* dumping_node, const char* func, const char* file, const int line);
 
@@ -78,25 +118,22 @@ int   NodeDump(FILE* fp, const void* dumping_node, const char* func, const char*
                                 LogDump(NodeDump, (node), __func__, __FILE__, __LINE__);    \
                             } while(0)
 
-TreeErrors NodeVerify(const Node* node, error_t* error);
+DiffErrors NodeVerify(const Node* node, error_t* error);
 
 #ifdef CHECK_NODE
 #undef CHECK_NODE
 #endif
 #define CHECK_NODE(node, error)     do                                                              \
                                     {                                                               \
-                                        TreeErrors node_err_ = NodeVerify(node, error);             \
-                                        if (node_err_ != TreeErrors::NONE)                          \
+                                        DiffErrors node_err_ = NodeVerify(node, error);             \
+                                        if (node_err_ != DiffErrors::NONE)                          \
                                             return node_err_;                                       \
                                     } while(0)
 
-node_data_t ReadNodeData(Storage* info, error_t* error);
-
-TreeErrors TreeCtor(tree_t* tree, error_t* error);
+DiffErrors TreeCtor(tree_t* tree, error_t* error);
 void       TreeDtor(tree_t* tree);
-void       TreePrefixPrint(FILE* fp, const tree_t* tree);
-void       TreePostfixPrint(FILE* fp, const tree_t* tree);
-void       TreeInfixPrint(FILE* fp, const tree_t* tree);
+void       TreePrintEquation(FILE* fp, const tree_t* tree);
+void       TreeInfixRead(Storage* info, tree_t* tree, error_t* error);
 void       TreePrefixRead(Storage* info, tree_t* tree, error_t* error);
 int        TreeDump(FILE* fp, const void* nodes, const char* func, const char* file, const int line);
 
@@ -108,17 +145,19 @@ int        TreeDump(FILE* fp, const void* nodes, const char* func, const char* f
                                 LogDump(TreeDump, (tree), __func__, __FILE__, __LINE__);    \
                             } while(0)
 
-TreeErrors TreeVerify(const tree_t* tree, error_t* error);
+DiffErrors TreeVerify(const tree_t* tree, error_t* error);
 
 #ifdef CHECK_TREE
 #undef CHECK_TREE
 #endif
 #define CHECK_TREE(tree, error)     do                                                              \
                                     {                                                               \
-                                        TreeErrors tree_err_ = TreeVerify(tree, error);             \
-                                        if (tree_err_ != TreeErrors::NONE)                          \
+                                        DiffErrors tree_err_ = TreeVerify(tree, error);             \
+                                        if (tree_err_ != DiffErrors::NONE)                          \
                                             return tree_err_;                                       \
                                     } while(0)
+
+double CalculateTree(tree_t* tree, Node* node, error_t* error);
 
 #endif
 

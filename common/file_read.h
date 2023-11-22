@@ -124,5 +124,6 @@ int  Bufgetc(Storage* info);
 void SkipBufSpaces(Storage* info);
 
 int  BufScanfWord(Storage* info, char* dest);
+int  BufScanfDouble(Storage* info, double* number);
 
 #endif

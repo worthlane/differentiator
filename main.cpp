@@ -23,8 +23,12 @@ int main(const int argc, const char* argv[])
     Storage info = {};
     CreateTextStorage(&info, &error, data_file);
 
-    TreePrefixRead(&info, &tree, &error);
+    TreeInfixRead(&info, &tree, &error);
     EXIT_IF_TREE_ERROR(&error);
+
+    TreePrintEquation(stdout, &tree);
+
+    printf("%lf\n", CalculateTree(&tree, tree.root, &error));
 
     DUMP_TREE(&tree);
 

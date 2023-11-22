@@ -291,9 +291,23 @@ void Bufungetc(Storage* info)
 
 int BufScanfWord(Storage* info, char* dest)
 {
+    assert(dest);
 
-    int  symb_amt = 0;
+    int symb_amt = 0;
     int done = sscanf(info->buf + info->ptr, "%s%n", dest, &symb_amt);
+    info->ptr += symb_amt;
+
+    return done;
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+int BufScanfDouble(Storage* info, double* number)
+{
+    assert(number);
+
+    int symb_amt = 0;
+    int done = sscanf(info->buf + info->ptr, "%lf%n", number, &symb_amt);
     info->ptr += symb_amt;
 
     return done;
