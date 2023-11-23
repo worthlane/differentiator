@@ -133,6 +133,7 @@ DiffErrors NodeVerify(const Node* node, error_t* error);
 DiffErrors TreeCtor(tree_t* tree, error_t* error);
 void       TreeDtor(tree_t* tree);
 void       TreePrintEquation(FILE* fp, const tree_t* tree);
+void       TreePrintEquationLatex(FILE* fp, const tree_t* tree);
 void       TreeInfixRead(Storage* info, tree_t* tree, error_t* error);
 void       TreePrefixRead(Storage* info, tree_t* tree, error_t* error);
 int        TreeDump(FILE* fp, const void* nodes, const char* func, const char* file, const int line);

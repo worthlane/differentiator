@@ -23,6 +23,7 @@ static bool        TryReadNumber(Storage* info, DataType* type, DataValue* value
 
 static void        TextTreeDump(FILE* fp, const tree_t* tree);
 static void        NodesInfixPrint(FILE* fp, const tree_t* tree, const Node* node);
+static void        NodesInfixPrintLatex(FILE* fp, const tree_t* tree, const Node* node);
 static void        PrintNodeData(FILE* fp, const tree_t* tree, const Node* node);
 static void        PrintNodeDataType(FILE* fp, const DataType type);
 static Operators   DefineOperator(const char* word);
@@ -362,6 +363,16 @@ void TreePrintEquation(FILE* fp, const tree_t* tree)
 
 //-----------------------------------------------------------------------------------------------------
 
+void TreePrintEquationLatex(FILE* fp, const tree_t* tree)
+{
+    assert(tree);
+    fprintf(fp, "$");
+    NodesInfixPrintLatex(fp, tree, tree->root);
+    fprintf(fp, "$\n");
+}
+
+//-----------------------------------------------------------------------------------------------------
+
 static void NodesInfixPrint(FILE* fp, const tree_t* tree, const Node* node)
 {
     if (!node) { return; }
@@ -383,6 +394,43 @@ static void NodesInfixPrint(FILE* fp, const tree_t* tree, const Node* node)
 
     if (need_brackets_on_the_right) fprintf(fp, "(");
     NodesInfixPrint(fp, tree, node->right);
+    if (need_brackets_on_the_right) fprintf(fp, ")");
+
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+static void NodesInfixPrintLatex(FILE* fp, const tree_t* tree, const Node* node)
+{
+    if (!node) { return; }
+
+    if (node->left == nullptr || node->right == nullptr)
+    {
+        PrintNodeData(fp, tree, node);
+        return;
+    }
+
+    if (node->type == DataType::OPERATOR && node->value.operation == Operators::DIV)
+    {
+        fprintf(fp, "\\frac{");
+        NodesInfixPrintLatex(fp, tree, node->left);
+        fprintf(fp, "}{");
+        NodesInfixPrintLatex(fp, tree, node->right);
+        fprintf(fp, "}");
+        return;
+    }
+
+    bool need_brackets_on_the_left  = CheckBracketsNeededInEquation(node->left);
+    bool need_brackets_on_the_right = CheckBracketsNeededInEquation(node->right);
+
+    if (need_brackets_on_the_left) fprintf(fp, "(");
+    NodesInfixPrintLatex(fp, tree, node->left);
+    if (need_brackets_on_the_left) fprintf(fp, ")");
+
+    PrintNodeData(fp, tree, node);
+
+    if (need_brackets_on_the_right) fprintf(fp, "(");
+    NodesInfixPrintLatex(fp, tree, node->right);
     if (need_brackets_on_the_right) fprintf(fp, ")");
 
 }
@@ -613,7 +661,7 @@ static Node* PrefixReadNewNode(tree_t* tree, Storage* info, Node* parent_node, e
     if (error->code != (int) DiffErrors::NONE)
         return nullptr;
 
-    Node* left = NodesPrefixRead(tree, info, node, error);
+    Node* left  = NodesPrefixRead(tree, info, node, error);
     Node* right = NodesPrefixRead(tree, info, node, error);
 
     node->parent = parent_node;
@@ -681,7 +729,10 @@ static int FindVariableAmongSaved(variable_t* vars, const char* new_var)
         if (!vars[i].isfree)
         {
             if (!strncmp(new_var, vars[i].variable_name, MAX_VARIABLE_LEN))
+            {
                 id = i;
+                return id;
+            }
         }
     }
 
@@ -702,6 +753,7 @@ static int SaveVariable(variable_t* vars, const char* new_var)
         {
             id = i;
             vars[i].variable_name = strndup(new_var, MAX_VARIABLE_LEN);
+            return id;
         }
     }
 

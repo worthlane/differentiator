@@ -30,6 +30,8 @@ int main(const int argc, const char* argv[])
 
     printf("%lf\n", CalculateTree(&tree, tree.root, &error));
 
+    TreePrintEquationLatex(stdout, &tree);
+
     DUMP_TREE(&tree);
 
     fclose(fp);
