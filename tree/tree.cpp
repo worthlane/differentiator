@@ -11,14 +11,14 @@
 static void        DestructNodes(Node* root);
 static DiffErrors  VerifyNodes(const Node* node, error_t* error);
 
-static Node*       NodesInfixRead(tree_t* tree, Storage* info, Node* current_node, error_t* error);
+static Node*       ReadEquationAsTree(tree_t* tree, Storage* info, Node* current_node, error_t* error);
 static Node*       NodesPrefixRead(tree_t* tree, Storage* info, Node* current_node, error_t* error);
 static void        ReadNodeData(tree_t* tree, Storage* info, DataType* type, DataValue* value,  error_t* error);
 
 static inline void DeleteClosingBracketFromWord(Storage* info, char* read);
 static char        CheckOpeningBracketInInput(Storage* info);
 
-static Node*       InfixReadNewNode(tree_t* tree, Storage* info, Node* parent_node, error_t* error);
+static Node*       EquationReadNewNode(tree_t* tree, Storage* info, Node* parent_node, error_t* error);
 static Node*       PrefixReadNewNode(tree_t* tree, Storage* info, Node* parent_node, error_t* error);
 static bool        TryReadNumber(Storage* info, DataType* type, DataValue* value);
 
@@ -45,7 +45,7 @@ static inline void DrawNodes(FILE* dotf, const tree_t* tree, const Node* node, c
 
 // =========================
 
-static const char* NIL = "_";
+static const char* NIL = "nil";
 
 // ======== OPERATORS ======
 
@@ -514,7 +514,7 @@ void TreeInfixRead(Storage* info, tree_t* tree, error_t* error)
     else
     {
         Bufungetc(info);
-        root = NodesInfixRead(tree, info, root, error);
+        root = ReadEquationAsTree(tree, info, root, error);
     }
 
     tree->root = root;
@@ -558,7 +558,7 @@ static char CheckOpeningBracketInInput(Storage* info)
 
 //-----------------------------------------------------------------------------------------------------
 
-static Node* NodesInfixRead(tree_t* tree, Storage* info, Node* current_node, error_t* error)
+static Node* ReadEquationAsTree(tree_t* tree, Storage* info, Node* current_node, error_t* error)
 {
     assert(error);
     assert(tree);
@@ -568,7 +568,7 @@ static Node* NodesInfixRead(tree_t* tree, Storage* info, Node* current_node, err
 
     if (opening_bracket_check == '(')
     {
-        Node* new_node = InfixReadNewNode(tree, info, current_node, error);
+        Node* new_node = EquationReadNewNode(tree, info, current_node, error);
 
         char closing_bracket_check = Bufgetc(info);
         if (closing_bracket_check != ')')
@@ -582,14 +582,6 @@ static Node* NodesInfixRead(tree_t* tree, Storage* info, Node* current_node, err
     else
     {
         Bufungetc(info);
-
-        char read[MAX_STRING_LEN] = "";
-        BufScanfWord(info, read);
-
-        DeleteClosingBracketFromWord(info, read);
-
-        if (strncmp(read, NIL, MAX_STRING_LEN))
-            error->code = (int) DiffErrors::INVALID_SYNTAX;
 
         return nullptr;
     }
@@ -636,7 +628,7 @@ static Node* NodesPrefixRead(tree_t* tree, Storage* info, Node* current_node, er
 
 //-----------------------------------------------------------------------------------------------------
 
-static Node* InfixReadNewNode(tree_t* tree, Storage* info, Node* parent_node, error_t* error)
+static Node* EquationReadNewNode(tree_t* tree, Storage* info, Node* parent_node, error_t* error)
 {
     assert(tree);
     assert(info);
@@ -647,13 +639,13 @@ static Node* InfixReadNewNode(tree_t* tree, Storage* info, Node* parent_node, er
     DataType type = DEFAULT_TYPE;
     DataValue val = DEFAULT_VALUE;
 
-    Node* left = NodesInfixRead(tree, info, node, error);
+    Node* left = ReadEquationAsTree(tree, info, node, error);
 
     ReadNodeData(tree, info, &type, &val, error);
     if (error->code != (int) DiffErrors::NONE)
         return nullptr;
 
-    Node* right = NodesInfixRead(tree, info, node, error);
+    Node* right = ReadEquationAsTree(tree, info, node, error);
 
     node->parent = parent_node;
     node->type   = type;
