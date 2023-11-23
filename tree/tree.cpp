@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <string.h>
 #include <ctype.h>
+#include <time.h>
 
 #include "tree.h"
 #include "graphs.h"
@@ -33,6 +34,8 @@ static bool        CheckBracketsNeededInEquation(const Node* node);
 static int         GetOperationPriority(const Operators sign);
 static double      OperationWithTwoNumbers(const double number_1, const double number_2,
                                            const Operators operation, error_t* error);
+
+static void        PrintPrankPhrase(FILE* fp);
 
 // ======== GRAPHS =========
 
@@ -84,7 +87,7 @@ static double OperationWithTwoNumbers(const double number_1, const double number
             return number_1 - number_2;
         default:
             error->code = (int) DiffErrors::UNKNOWN_OPERATION;
-            return 0;
+            return PZN;
     }
 }
 
@@ -366,9 +369,28 @@ void TreePrintEquation(FILE* fp, const tree_t* tree)
 void TreePrintEquationLatex(FILE* fp, const tree_t* tree)
 {
     assert(tree);
+    PrintPrankPhrase(fp);
     fprintf(fp, "$");
     NodesInfixPrintLatex(fp, tree, tree->root);
     fprintf(fp, "$\n");
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+static void PrintPrankPhrase(FILE* fp)
+{
+    static const int   PHRASE_AMT = 5;
+    static const char* PHRASES[] = {"Очевидно, что",
+                                    "Несложно показать, что",
+                                    "При виде формулы становится ясно, что",
+                                    "Нет такого?",
+                                    "Согл?"};
+
+    srand(time(NULL));
+
+    int nmb = rand() % 5;
+
+    fprintf(fp, "%s ", PHRASES[nmb]);
 }
 
 //-----------------------------------------------------------------------------------------------------
