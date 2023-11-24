@@ -21,20 +21,20 @@ IMAGE = img
 BUILD_DIR = build/bin
 OBJECTS_DIR = build
 SOURCES = main.cpp
-TREE_SOURCES = tree/tree.cpp tree/graphs.cpp
-TREE_DIR = tree
-COMMON_SOURCES = common/logs.cpp common/errors.cpp common/input_and_output.cpp common/file_read.cpp
+EXPRESSION_SOURCES = expression.cpp graphs.cpp
+EXPRESSION_DIR = expression
+COMMON_SOURCES = logs.cpp errors.cpp input_and_output.cpp file_read.cpp
 COMMON_DIR = common
 OBJECTS = $(SOURCES:%.cpp=$(OBJECTS_DIR)/%.o)
-TREE_OBJECTS = $(TREE_SOURCES:$(TREE_DIR)/%.cpp=$(OBJECTS_DIR)/%.o)
-COMMON_OBJECTS = $(COMMON_SOURCES:$(COMMON_DIR)/%.cpp=$(OBJECTS_DIR)/%.o)
+EXPRESSION_OBJECTS = $(EXPRESSION_SOURCES:%.cpp=$(OBJECTS_DIR)/%.o)
+COMMON_OBJECTS = $(COMMON_SOURCES:%.cpp=$(OBJECTS_DIR)/%.o)
 DOXYFILE = Doxyfile
 DOXYBUILD = doxygen $(DOXYFILE)
 
 .PHONY: all
 all: $(EXECUTABLE)
 
-$(EXECUTABLE): $(OBJECTS) $(TREE_OBJECTS) $(COMMON_OBJECTS)
+$(EXECUTABLE): $(OBJECTS) $(EXPRESSION_OBJECTS) $(COMMON_OBJECTS)
 	$(CXX) $^ -o $@ $(CXXFLAGS)
 
 $(OBJECTS_DIR)/%.o : %.cpp
@@ -43,7 +43,7 @@ $(OBJECTS_DIR)/%.o : %.cpp
 $(OBJECTS_DIR)/%.o : $(COMMON_DIR)/%.cpp
 	$(CXX) -c $^ -o $@ $(CXXFLAGS)
 
-$(OBJECTS_DIR)/%.o : $(TREE_DIR)/%.cpp
+$(OBJECTS_DIR)/%.o : $(EXPRESSION_DIR)/%.cpp
 	$(CXX) -c $^ -o $@ $(CXXFLAGS)
 
 .PHONY: doxybuild clean install test

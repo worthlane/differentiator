@@ -3,60 +3,67 @@
 #include <ctype.h>
 #include <time.h>
 
-#include "tree.h"
+#include "expression.h"
 #include "graphs.h"
 #include "common/input_and_output.h"
 #include "common/file_read.h"
 
-static void        DestructNodes(Node* root);
-static DiffErrors  VerifyNodes(const Node* node, error_t* error);
+static void              DestructNodes(Node* root);
+static ExpressionErrors  VerifyNodes(const Node* node, error_t* error);
 
-static Node*       ReadEquationAsTree(tree_t* tree, Storage* info, Node* current_node, error_t* error);
-static Node*       NodesPrefixRead(tree_t* tree, Storage* info, Node* current_node, error_t* error);
-static void        ReadNodeData(tree_t* tree, Storage* info, DataType* type, DataValue* value,  error_t* error);
+static const double POISON = 0xDEC0;
+
+// ======================================================================
+// EXPRESSION INPUT
+// ======================================================================
+
+static const char* NIL = "nil";
+
+static Node*       ReadExpressionAsTree(expr_t* expr, Storage* info, Node* current_node, error_t* error);
+static Node*       NodesPrefixRead(expr_t* expr, Storage* info, Node* current_node, error_t* error);
+static void        ReadNodeData(expr_t* expr, Storage* info, NodeType* type, NodeValue* value,  error_t* error);
 
 static inline void DeleteClosingBracketFromWord(Storage* info, char* read);
 static char        CheckOpeningBracketInInput(Storage* info);
 
-static Node*       EquationReadNewNode(tree_t* tree, Storage* info, Node* parent_node, error_t* error);
-static Node*       PrefixReadNewNode(tree_t* tree, Storage* info, Node* parent_node, error_t* error);
-static bool        TryReadNumber(Storage* info, DataType* type, DataValue* value);
+static Node*       ExpressionReadNewNode(expr_t* expr, Storage* info, Node* parent_node, error_t* error);
+static Node*       PrefixReadNewNode(expr_t* expr, Storage* info, Node* parent_node, error_t* error);
+static bool        TryReadNumber(Storage* info, NodeType* type, NodeValue* value);
 
-static void        TextTreeDump(FILE* fp, const tree_t* tree);
-static void        NodesInfixPrint(FILE* fp, const tree_t* tree, const Node* node);
-static void        NodesInfixPrintLatex(FILE* fp, const tree_t* tree, const Node* node);
-static void        PrintNodeData(FILE* fp, const tree_t* tree, const Node* node);
-static void        PrintNodeDataType(FILE* fp, const DataType type);
+// ======================================================================
+// EXPRESSION OUTPUT
+// ======================================================================
+
+static void        TextExpressionDump(FILE* fp, const expr_t* expr);
+static void        NodesInfixPrint(FILE* fp, const expr_t* expr, const Node* node);
+static void        NodesInfixPrintLatex(FILE* fp, const expr_t* expr, const Node* node);
+static void        PrintNodeData(FILE* fp, const expr_t* expr, const Node* node);
+static void        PrintNodeDataType(FILE* fp, const NodeType type);
+
+static bool        CheckBracketsNeededInEquation(const Node* node);
+
+// ======================================================================
+// GRAPH BUILDING
+// ======================================================================
+
+static void DrawTreeGraph(const expr_t* expr);
+
+static inline void DrawNodes(FILE* dotf, const expr_t* expr, const Node* node, const int rank);
+
+// ======================================================================
+// EXPRESSION OPERATORS
+// ======================================================================
+
 static Operators   DefineOperator(const char* word);
 static void        PrintOperator(FILE* fp, const Operators sign);
 
-static bool        CheckBracketsNeededInEquation(const Node* node);
 static int         GetOperationPriority(const Operators sign);
 static double      OperationWithTwoNumbers(const double number_1, const double number_2,
                                            const Operators operation, error_t* error);
 
-static void        PrintPrankPhrase(FILE* fp);
-
-// ======== GRAPHS =========
-
-static void DrawTreeGraph(const tree_t* tree);
-
-static inline void DrawNodes(FILE* dotf, const tree_t* tree, const Node* node, const int rank);
-
-// =========================
-
-static const char* NIL = "nil";
-
-// ======== OPERATORS ======
-
-static const char* ADD = "+";
-static const char* SUB = "-";
-static const char* DIV = "/";
-static const char* MUL = "*";
-
-// =========================
-
-// ::::::::::::: VARIABLES FUNCS :::::::::::::
+// ======================================================================
+// EXPRESSION VARIABLES
+// ======================================================================
 
 static void InitVariablesArray(variable_t* variables, size_t size);
 static void DestructVariablesArray(variable_t* variables, size_t size);
@@ -65,10 +72,6 @@ static int SaveVariable(variable_t* vars, const char* new_var);
 static int FindVariableAmongSaved(variable_t* vars, const char* new_var);
 
 static const int NO_VARIABLE = -1;
-
-// ::::::::::::::::::::::::::::::::::::::::
-
-static const double PZN = 0xDEC0;
 
 //------------------------------------------------------------------
 
@@ -86,45 +89,45 @@ static double OperationWithTwoNumbers(const double number_1, const double number
         case (Operators::SUB):
             return number_1 - number_2;
         default:
-            error->code = (int) DiffErrors::UNKNOWN_OPERATION;
-            return PZN;
+            error->code = (int) ExpressionErrors::UNKNOWN_OPERATION;
+            return POISON;
     }
 }
 
 //------------------------------------------------------------------
 
-double CalculateTree(tree_t* tree, Node* node, error_t* error)
+double CalculateExpression(expr_t* expr, Node* node, error_t* error)
 {
-    assert(tree);
+    assert(expr);
     assert(error);
     assert(node);
 
     if (node->left == nullptr || node->right == nullptr)
     {
-        if (node->type == DataType::NUMBER)             return node->value.value;
-        else if (node->type == DataType::VARIABLE)      return tree->vars[node->value.variable].value;
+        if (node->type == NodeType::NUMBER)             return node->value.val;
+        else if (node->type == NodeType::VARIABLE)      return expr->vars[node->value.var].value;
         else
         {
-            error->code = (int) DiffErrors::WRONG_EQUATION;
+            error->code = (int) ExpressionErrors::WRONG_EQUATION;
             return 0;
         }
     }
 
-    double left_result  = CalculateTree(tree, node->left, error);
-    double right_result = CalculateTree(tree, node->right, error);
+    double left_result  = CalculateExpression(expr, node->left, error);
+    double right_result = CalculateExpression(expr, node->right, error);
 
-    if (node->type != DataType::OPERATOR)
+    if (node->type != NodeType::OPERATOR)
     {
-        error->code = (int) DiffErrors::WRONG_EQUATION;
+        error->code = (int) ExpressionErrors::WRONG_EQUATION;
         return 0;
     }
 
-    double result = OperationWithTwoNumbers(left_result, right_result, node->value.operation, error);
+    double result = OperationWithTwoNumbers(left_result, right_result, node->value.opt, error);
 
-    if (error->code == (int) DiffErrors::NONE)
+    if (error->code == (int) ExpressionErrors::NONE)
         return result;
     else
-        return PZN;
+        return POISON;
 
 }
 
@@ -160,7 +163,7 @@ static void DestructVariablesArray(variable_t* variables, size_t size)
 
 //-----------------------------------------------------------------------------------------------------
 
-Node* NodeCtor(const DataType type, const DataValue value,
+Node* NodeCtor(const NodeType type, const NodeValue value,
                Node* left, Node* right, Node* parent, error_t* error)
 {
     assert(error);
@@ -168,7 +171,7 @@ Node* NodeCtor(const DataType type, const DataValue value,
     Node* node = (Node*) calloc(1, sizeof(Node));
     if (node == nullptr)
     {
-        error->code = (int) DiffErrors::ALLOCATE_MEMORY;
+        error->code = (int) ExpressionErrors::ALLOCATE_MEMORY;
         error->data = "NODE";
         return nullptr;
     }
@@ -193,20 +196,20 @@ void NodeDtor(Node* node)
 
 //-----------------------------------------------------------------------------------------------------
 
-static void PrintNodeData(FILE* fp, const tree_t* tree, const Node* node)
+static void PrintNodeData(FILE* fp, const expr_t* expr, const Node* node)
 {
     assert(node);
 
     switch(node->type)
     {
-        case (DataType::NUMBER):
-            fprintf(fp, " %g ", node->value.value);
+        case (NodeType::NUMBER):
+            fprintf(fp, " %g ", node->value.val);
             break;
-        case (DataType::VARIABLE):
-            fprintf(fp, " %s ", tree->vars[node->value.variable].variable_name);
+        case (NodeType::VARIABLE):
+            fprintf(fp, " %s ", expr->vars[node->value.var].variable_name);
             break;
-        case (DataType::OPERATOR):
-            PrintOperator(fp, node->value.operation);
+        case (NodeType::OPERATOR):
+            PrintOperator(fp, node->value.opt);
             break;
         default:
             fprintf(fp, " undefined ");
@@ -238,17 +241,17 @@ static void PrintOperator(FILE* fp, const Operators sign)
 
 //-----------------------------------------------------------------------------------------------------
 
-static void PrintNodeDataType(FILE* fp, const DataType type)
+static void PrintNodeDataType(FILE* fp, const NodeType type)
 {
     switch (type)
     {
-        case (DataType::NUMBER):
+        case (NodeType::NUMBER):
             fprintf(fp, "number");
             break;
-        case (DataType::OPERATOR):
+        case (NodeType::OPERATOR):
             fprintf(fp, "operator");
             break;
-        case (DataType::VARIABLE):
+        case (NodeType::VARIABLE):
             fprintf(fp, "variable");
             break;
         default:
@@ -258,35 +261,57 @@ static void PrintNodeDataType(FILE* fp, const DataType type)
 
 //-----------------------------------------------------------------------------------------------------
 
-DiffErrors TreeCtor(tree_t* tree, error_t* error)
+ExpressionErrors ExpressionCtor(expr_t* expr, error_t* error)
 {
-    Node* root = NodeCtor(DEFAULT_TYPE, DEFAULT_VALUE, nullptr, nullptr, nullptr, error);
-    RETURN_IF_TREE_ERROR((DiffErrors) error->code);
+    Node* root = NodeCtor(INIT_TYPE, INIT_VALUE, nullptr, nullptr, nullptr, error);
+    RETURN_IF_EXPRESSION_ERROR((ExpressionErrors) error->code);
 
     variable_t* vars = (variable_t*) calloc(MAX_VARIABLES_AMT, sizeof(variable_t));
     if (vars == nullptr)
     {
-        error->code = (int) DiffErrors::ALLOCATE_MEMORY;
+        error->code = (int) ExpressionErrors::ALLOCATE_MEMORY;
         error->data = "VARIABLES ARRAY";
-        return DiffErrors::ALLOCATE_MEMORY;
+        return ExpressionErrors::ALLOCATE_MEMORY;
     }
     InitVariablesArray(vars, MAX_VARIABLES_AMT);
 
-    tree->vars = vars;
-    tree->root = root;
+    expr->vars = vars;
+    expr->root = root;
 
-    return DiffErrors::NONE;
+    return ExpressionErrors::NONE;
 }
 
 //-----------------------------------------------------------------------------------------------------
 
-void TreeDtor(tree_t* tree)
+expr_t* MakeExpression(error_t* error)
 {
-    DestructNodes(tree->root);
+    assert(error);
 
-    DestructVariablesArray(tree->vars, MAX_VARIABLES_AMT);
-    free(tree->vars);
-    tree->root = nullptr;
+    expr_t* expr = (expr_t*) calloc(1, sizeof(expr_t));
+    if (expr == nullptr)
+    {
+        error->code = (int) ExpressionErrors::ALLOCATE_MEMORY;
+        error->data = "EXPRESSION STRUCT";
+        return nullptr;
+    }
+
+    ExpressionCtor(expr, error);
+    if (error->code != (int) ExpressionErrors::NONE)
+        return nullptr;
+
+    return expr;
+}
+
+
+//-----------------------------------------------------------------------------------------------------
+
+void ExpressionDtor(expr_t* expr)
+{
+    DestructNodes(expr->root);
+
+    DestructVariablesArray(expr->vars, MAX_VARIABLES_AMT);
+    free(expr->vars);
+    expr->root = nullptr;
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -304,7 +329,7 @@ static void DestructNodes(Node* root)
 
 //-----------------------------------------------------------------------------------------------------
 
-int PrintTreeError(FILE* fp, const void* err, const char* func, const char* file, const int line)
+int PrintExpressionError(FILE* fp, const void* err, const char* func, const char* file, const int line)
 {
     assert(err);
 
@@ -312,96 +337,78 @@ int PrintTreeError(FILE* fp, const void* err, const char* func, const char* file
 
     const struct ErrorInfo* error = (const struct ErrorInfo*) err;
 
-    switch ((DiffErrors) error->code)
+    switch ((ExpressionErrors) error->code)
     {
-        case (DiffErrors::NONE):
+        case (ExpressionErrors::NONE):
             LOG_END();
             return (int) error->code;
 
-        case (DiffErrors::ALLOCATE_MEMORY):
+        case (ExpressionErrors::ALLOCATE_MEMORY):
             fprintf(fp, "CAN NOT ALLOCATE MEMORY FOR %s<br>\n", (const char*) error->data);
             LOG_END();
             return (int) error->code;
 
-        case (DiffErrors::EMPTY_TREE):
-            fprintf(fp, "TREE IS EMPTY<br>\n");
+        case (ExpressionErrors::EMPTY_TREE):
+            fprintf(fp, "EXPRESSION TREE IS EMPTY<br>\n");
             LOG_END();
             return (int) error->code;
 
-        case (DiffErrors::INVALID_SYNTAX):
+        case (ExpressionErrors::INVALID_SYNTAX):
             fprintf(fp, "UNKNOWN INPUT<br>\n");
             LOG_END();
             return (int) error->code;
 
-        case (DiffErrors::CYCLED_NODE):
+        case (ExpressionErrors::CYCLED_NODE):
             fprintf(fp, "NODE ID IT'S OWN PREDECESSOR<br>\n");
             DUMP_NODE(error->data);
             LOG_END();
             return (int) error->code;
 
-        case (DiffErrors::COMMON_HEIR):
+        case (ExpressionErrors::COMMON_HEIR):
             fprintf(fp, "NODE'S HEIRS ARE SAME<br>\n");
             DUMP_NODE(error->data);
             LOG_END();
             return (int) error->code;
 
-        case (DiffErrors::UNKNOWN):
+        case (ExpressionErrors::UNKNOWN):
         // fall through
         default:
-            fprintf(fp, "UNKNOWN ERROR WITH TREE<br>\n");
+            fprintf(fp, "UNKNOWN ERROR WITH EXPRESSION<br>\n");
             LOG_END();
-            return (int) DiffErrors::UNKNOWN;
+            return (int) ExpressionErrors::UNKNOWN;
     }
 }
 
 //-----------------------------------------------------------------------------------------------------
 
-void TreePrintEquation(FILE* fp, const tree_t* tree)
+void PrintExpressionTree(FILE* fp, const expr_t* expr)
 {
-    assert(tree);
+    assert(expr);
 
-    NodesInfixPrint(fp, tree, tree->root);
+    NodesInfixPrint(fp, expr, expr->root);
     fprintf(fp, "\n");
 }
 
 //-----------------------------------------------------------------------------------------------------
 
-void TreePrintEquationLatex(FILE* fp, const tree_t* tree)
+void PrintExpressionTreeLatex(FILE* fp, const expr_t* expr)
 {
-    assert(tree);
+    assert(expr);
     PrintPrankPhrase(fp);
     fprintf(fp, "$");
-    NodesInfixPrintLatex(fp, tree, tree->root);
+    NodesInfixPrintLatex(fp, expr, expr->root);
     fprintf(fp, "$\n");
 }
 
 //-----------------------------------------------------------------------------------------------------
 
-static void PrintPrankPhrase(FILE* fp)
-{
-    static const int   PHRASE_AMT = 5;
-    static const char* PHRASES[] = {"Очевидно, что",
-                                    "Несложно показать, что",
-                                    "При виде формулы становится ясно, что",
-                                    "Нет такого?",
-                                    "Согл?"};
-
-    srand(time(NULL));
-
-    int nmb = rand() % 5;
-
-    fprintf(fp, "%s ", PHRASES[nmb]);
-}
-
-//-----------------------------------------------------------------------------------------------------
-
-static void NodesInfixPrint(FILE* fp, const tree_t* tree, const Node* node)
+static void NodesInfixPrint(FILE* fp, const expr_t* expr, const Node* node)
 {
     if (!node) { return; }
 
     if (node->left == nullptr || node->right == nullptr)
     {
-        PrintNodeData(fp, tree, node);
+        PrintNodeData(fp, expr, node);
         return;
     }
 
@@ -409,35 +416,35 @@ static void NodesInfixPrint(FILE* fp, const tree_t* tree, const Node* node)
     bool need_brackets_on_the_right = CheckBracketsNeededInEquation(node->right);
 
     if (need_brackets_on_the_left) fprintf(fp, "(");
-    NodesInfixPrint(fp, tree, node->left);
+    NodesInfixPrint(fp, expr, node->left);
     if (need_brackets_on_the_left) fprintf(fp, ")");
 
-    PrintNodeData(fp, tree, node);
+    PrintNodeData(fp, expr, node);
 
     if (need_brackets_on_the_right) fprintf(fp, "(");
-    NodesInfixPrint(fp, tree, node->right);
+    NodesInfixPrint(fp, expr, node->right);
     if (need_brackets_on_the_right) fprintf(fp, ")");
 
 }
 
 //-----------------------------------------------------------------------------------------------------
 
-static void NodesInfixPrintLatex(FILE* fp, const tree_t* tree, const Node* node)
+static void NodesInfixPrintLatex(FILE* fp, const expr_t* expr, const Node* node)
 {
     if (!node) { return; }
 
     if (node->left == nullptr || node->right == nullptr)
     {
-        PrintNodeData(fp, tree, node);
+        PrintNodeData(fp, expr, node);
         return;
     }
 
-    if (node->type == DataType::OPERATOR && node->value.operation == Operators::DIV)
+    if (node->type == NodeType::OPERATOR && node->value.opt == Operators::DIV)
     {
         fprintf(fp, "\\frac{");
-        NodesInfixPrintLatex(fp, tree, node->left);
+        NodesInfixPrintLatex(fp, expr, node->left);
         fprintf(fp, "}{");
-        NodesInfixPrintLatex(fp, tree, node->right);
+        NodesInfixPrintLatex(fp, expr, node->right);
         fprintf(fp, "}");
         return;
     }
@@ -446,13 +453,13 @@ static void NodesInfixPrintLatex(FILE* fp, const tree_t* tree, const Node* node)
     bool need_brackets_on_the_right = CheckBracketsNeededInEquation(node->right);
 
     if (need_brackets_on_the_left) fprintf(fp, "(");
-    NodesInfixPrintLatex(fp, tree, node->left);
+    NodesInfixPrintLatex(fp, expr, node->left);
     if (need_brackets_on_the_left) fprintf(fp, ")");
 
-    PrintNodeData(fp, tree, node);
+    PrintNodeData(fp, expr, node);
 
     if (need_brackets_on_the_right) fprintf(fp, "(");
-    NodesInfixPrintLatex(fp, tree, node->right);
+    NodesInfixPrintLatex(fp, expr, node->right);
     if (need_brackets_on_the_right) fprintf(fp, ")");
 
 }
@@ -463,11 +470,11 @@ static bool CheckBracketsNeededInEquation(const Node* node)
 {
     assert(node);
 
-    if (node->type != DataType::OPERATOR)
+    if (node->type != NodeType::OPERATOR)
         return false;
 
-    int kid_priority    = GetOperationPriority(node->left->value.operation);
-    int parent_priority = GetOperationPriority(node->parent->value.operation);
+    int kid_priority    = GetOperationPriority(node->left->value.opt);
+    int parent_priority = GetOperationPriority(node->parent->value.opt);
 
     if (kid_priority < parent_priority)
         return true;
@@ -496,9 +503,9 @@ static int GetOperationPriority(const Operators sign)
 
 //-----------------------------------------------------------------------------------------------------
 
-void TreeInfixRead(Storage* info, tree_t* tree, error_t* error)
+void ExpressionInfixRead(Storage* info, expr_t* expr, error_t* error)
 {
-    assert(tree);
+    assert(expr);
     assert(info);
 
     SkipBufSpaces(info);
@@ -508,23 +515,23 @@ void TreeInfixRead(Storage* info, tree_t* tree, error_t* error)
 
     if (ch == EOF)
     {
-        error->code = (int) DiffErrors::EMPTY_TREE;
+        error->code = (int) ExpressionErrors::EMPTY_TREE;
         return;
     }
     else
     {
         Bufungetc(info);
-        root = ReadEquationAsTree(tree, info, root, error);
+        root = ReadExpressionAsTree(expr, info, root, error);
     }
 
-    tree->root = root;
+    expr->root = root;
 }
 
 //-----------------------------------------------------------------------------------------------------
 
-void TreePrefixRead(Storage* info, tree_t* tree, error_t* error)
+void ExpressionPrefixRead(Storage* info, expr_t* expr, error_t* error)
 {
-    assert(tree);
+    assert(expr);
     assert(info);
 
     SkipBufSpaces(info);
@@ -534,16 +541,16 @@ void TreePrefixRead(Storage* info, tree_t* tree, error_t* error)
 
     if (ch == EOF)
     {
-        error->code = (int) DiffErrors::EMPTY_TREE;
+        error->code = (int) ExpressionErrors::EMPTY_TREE;
         return;
     }
     else
     {
         Bufungetc(info);
-        root = NodesPrefixRead(tree, info, root, error);
+        root = NodesPrefixRead(expr, info, root, error);
     }
 
-    tree->root = root;
+    expr->root = root;
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -558,22 +565,22 @@ static char CheckOpeningBracketInInput(Storage* info)
 
 //-----------------------------------------------------------------------------------------------------
 
-static Node* ReadEquationAsTree(tree_t* tree, Storage* info, Node* current_node, error_t* error)
+static Node* ReadExpressionAsTree(expr_t* expr, Storage* info, Node* current_node, error_t* error)
 {
     assert(error);
-    assert(tree);
+    assert(expr);
     assert(info);
 
     char opening_bracket_check = CheckOpeningBracketInInput(info);
 
     if (opening_bracket_check == '(')
     {
-        Node* new_node = EquationReadNewNode(tree, info, current_node, error);
+        Node* new_node = ExpressionReadNewNode(expr, info, current_node, error);
 
         char closing_bracket_check = Bufgetc(info);
         if (closing_bracket_check != ')')
         {
-            error->code = (int) DiffErrors::INVALID_SYNTAX;
+            error->code = (int) ExpressionErrors::INVALID_SYNTAX;
             return nullptr;
         }
 
@@ -589,22 +596,22 @@ static Node* ReadEquationAsTree(tree_t* tree, Storage* info, Node* current_node,
 
 //-----------------------------------------------------------------------------------------------------
 
-static Node* NodesPrefixRead(tree_t* tree, Storage* info, Node* current_node, error_t* error)
+static Node* NodesPrefixRead(expr_t* expr, Storage* info, Node* current_node, error_t* error)
 {
     assert(error);
-    assert(tree);
+    assert(expr);
     assert(info);
 
     char opening_bracket_check = CheckOpeningBracketInInput(info);
 
     if (opening_bracket_check == '(')
     {
-        Node* new_node = PrefixReadNewNode(tree, info, current_node, error);
+        Node* new_node = PrefixReadNewNode(expr, info, current_node, error);
 
         char closing_bracket_check = Bufgetc(info);
         if (closing_bracket_check != ')')
         {
-            error->code = (int) DiffErrors::INVALID_SYNTAX;
+            error->code = (int) ExpressionErrors::INVALID_SYNTAX;
             return nullptr;
         }
 
@@ -620,7 +627,7 @@ static Node* NodesPrefixRead(tree_t* tree, Storage* info, Node* current_node, er
         DeleteClosingBracketFromWord(info, read);
 
         if (strncmp(read, NIL, MAX_STRING_LEN))
-            error->code = (int) DiffErrors::INVALID_SYNTAX;
+            error->code = (int) ExpressionErrors::INVALID_SYNTAX;
     }
 
     return nullptr;
@@ -628,24 +635,24 @@ static Node* NodesPrefixRead(tree_t* tree, Storage* info, Node* current_node, er
 
 //-----------------------------------------------------------------------------------------------------
 
-static Node* EquationReadNewNode(tree_t* tree, Storage* info, Node* parent_node, error_t* error)
+static Node* ExpressionReadNewNode(expr_t* expr, Storage* info, Node* parent_node, error_t* error)
 {
-    assert(tree);
+    assert(expr);
     assert(info);
     assert(error);
 
-    Node* node = NodeCtor(DEFAULT_TYPE, DEFAULT_VALUE, nullptr, nullptr, nullptr, error);
+    Node* node = NodeCtor(INIT_TYPE, INIT_VALUE, nullptr, nullptr, nullptr, error);
 
-    DataType type = DEFAULT_TYPE;
-    DataValue val = DEFAULT_VALUE;
+    NodeType type = INIT_TYPE;
+    NodeValue val = INIT_VALUE;
 
-    Node* left = ReadEquationAsTree(tree, info, node, error);
+    Node* left = ReadExpressionAsTree(expr, info, node, error);
 
-    ReadNodeData(tree, info, &type, &val, error);
-    if (error->code != (int) DiffErrors::NONE)
+    ReadNodeData(expr, info, &type, &val, error);
+    if (error->code != (int) ExpressionErrors::NONE)
         return nullptr;
 
-    Node* right = ReadEquationAsTree(tree, info, node, error);
+    Node* right = ReadExpressionAsTree(expr, info, node, error);
 
     node->parent = parent_node;
     node->type   = type;
@@ -660,23 +667,23 @@ static Node* EquationReadNewNode(tree_t* tree, Storage* info, Node* parent_node,
 
 //-----------------------------------------------------------------------------------------------------
 
-static Node* PrefixReadNewNode(tree_t* tree, Storage* info, Node* parent_node, error_t* error)
+static Node* PrefixReadNewNode(expr_t* expr, Storage* info, Node* parent_node, error_t* error)
 {
-    assert(tree);
+    assert(expr);
     assert(info);
     assert(error);
 
-    Node* node = NodeCtor(DEFAULT_TYPE, DEFAULT_VALUE, nullptr, nullptr, nullptr, error);
+    Node* node = NodeCtor(INIT_TYPE, INIT_VALUE, nullptr, nullptr, nullptr, error);
 
-    DataType type = DEFAULT_TYPE;
-    DataValue val = DEFAULT_VALUE;
+    NodeType type = INIT_TYPE;
+    NodeValue val = INIT_VALUE;
 
-    ReadNodeData(tree, info, &type, &val, error);
-    if (error->code != (int) DiffErrors::NONE)
+    ReadNodeData(expr, info, &type, &val, error);
+    if (error->code != (int) ExpressionErrors::NONE)
         return nullptr;
 
-    Node* left  = NodesPrefixRead(tree, info, node, error);
-    Node* right = NodesPrefixRead(tree, info, node, error);
+    Node* left  = NodesPrefixRead(expr, info, node, error);
+    Node* right = NodesPrefixRead(expr, info, node, error);
 
     node->parent = parent_node;
     node->type   = type;
@@ -691,12 +698,12 @@ static Node* PrefixReadNewNode(tree_t* tree, Storage* info, Node* parent_node, e
 
 //-----------------------------------------------------------------------------------------------------
 
-static void ReadNodeData(tree_t* tree, Storage* info, DataType* type, DataValue* value,  error_t* error)
+static void ReadNodeData(expr_t* expr, Storage* info, NodeType* type, NodeValue* value,  error_t* error)
 {
     assert(error);
     assert(type);
     assert(value);
-    assert(tree);
+    assert(expr);
 
     if (TryReadNumber(info, type, value))
         return;
@@ -708,25 +715,25 @@ static void ReadNodeData(tree_t* tree, Storage* info, DataType* type, DataValue*
 
     if (sign != Operators::UNK)
     {
-        *type            = DataType::OPERATOR;
-        value->operation = sign;
+        *type            = NodeType::OPERATOR;
+        value->opt = sign;
         return;
     }
 
-    int id = FindVariableAmongSaved(tree->vars, word);
+    int id = FindVariableAmongSaved(expr->vars, word);
 
     if (id == NO_VARIABLE)
-        id = SaveVariable(tree->vars, word);
+        id = SaveVariable(expr->vars, word);
 
     if (id == NO_VARIABLE)
     {
-        *type = DataType::PZN;
-        error->code = (int) DiffErrors::UNKNOWN_INPUT;
+        *type = NodeType::POISON;
+        error->code = (int) ExpressionErrors::UNKNOWN_INPUT;
     }
     else
     {
-        *type           = DataType::VARIABLE;
-        value->variable = id;
+        *type           = NodeType::VARIABLE;
+        value->var = id;
     }
 }
 
@@ -776,15 +783,15 @@ static int SaveVariable(variable_t* vars, const char* new_var)
 
 //-----------------------------------------------------------------------------------------------------
 
-static bool TryReadNumber(Storage* info, DataType* type, DataValue* value)
+static bool TryReadNumber(Storage* info, NodeType* type, NodeValue* value)
 {
     double number = 0;
     int is_number = BufScanfDouble(info, &number);
 
     if (is_number)
     {
-        *type        = DataType::NUMBER;
-        value->value = number;
+        *type      = NodeType::NUMBER;
+        value->val = number;
         return true;
     }
 
@@ -811,25 +818,25 @@ static Operators DefineOperator(const char* word)
 
 //-----------------------------------------------------------------------------------------------------
 
-DiffErrors NodeVerify(const Node* node, error_t* error)
+ExpressionErrors NodeVerify(const Node* node, error_t* error)
 {
     assert(node);
     assert(error);
 
     if (node == node->left || node == node->right)
     {
-        error->code = (int) DiffErrors::CYCLED_NODE;
+        error->code = (int) ExpressionErrors::CYCLED_NODE;
         error->data = node;
-        return DiffErrors::CYCLED_NODE;
+        return ExpressionErrors::CYCLED_NODE;
     }
     if (node->left == node->right)
     {
-        error->code = (int) DiffErrors::COMMON_HEIR;
+        error->code = (int) ExpressionErrors::COMMON_HEIR;
         error->data = node;
-        return DiffErrors::COMMON_HEIR;
+        return ExpressionErrors::COMMON_HEIR;
     }
 
-    return DiffErrors::NONE;
+    return ExpressionErrors::NONE;
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -862,24 +869,24 @@ int NodeDump(FILE* fp, const void* dumping_node, const char* func, const char* f
 
     LOG_END();
 
-    return (int) DiffErrors::NONE;
+    return (int) ExpressionErrors::NONE;
 }
 
 //-----------------------------------------------------------------------------------------------------
 
-DiffErrors TreeVerify(const tree_t* tree, error_t* error)
+ExpressionErrors ExpressionVerify(const expr_t* expr, error_t* error)
 {
-    assert(tree);
+    assert(expr);
     assert(error);
 
-    VerifyNodes(tree->root, error);
+    VerifyNodes(expr->root, error);
 
-    return (DiffErrors) error->code;
+    return (ExpressionErrors) error->code;
 }
 
 //-----------------------------------------------------------------------------------------------------
 
-static DiffErrors VerifyNodes(const Node* node, error_t* error)
+static ExpressionErrors VerifyNodes(const Node* node, error_t* error)
 {
     assert(node);
     assert(error);
@@ -887,63 +894,63 @@ static DiffErrors VerifyNodes(const Node* node, error_t* error)
     if (node->left != nullptr)
     {
         NodeVerify(node->left, error);
-        RETURN_IF_TREE_ERROR((DiffErrors) error->code);
+        RETURN_IF_EXPRESSION_ERROR((ExpressionErrors) error->code);
     }
 
     if (node->right != nullptr)
     {
         NodeVerify(node->right, error);
-        RETURN_IF_TREE_ERROR((DiffErrors) error->code);
+        RETURN_IF_EXPRESSION_ERROR((ExpressionErrors) error->code);
     }
 
     NodeVerify(node, error);
 
-    return (DiffErrors) error->code;
+    return (ExpressionErrors) error->code;
 }
 
 //-----------------------------------------------------------------------------------------------------
 
-int TreeDump(FILE* fp, const void* nodes, const char* func, const char* file, const int line)
+int ExpressionDump(FILE* fp, const void* nodes, const char* func, const char* file, const int line)
 {
     assert(nodes);
 
     LOG_START_DUMP(func, file, line);
 
-    const tree_t* tree = (const tree_t*) nodes;
+    const expr_t* expr = (const expr_t*) nodes;
 
-    TextTreeDump(fp, tree);
-    DrawTreeGraph(tree);
+    TextExpressionDump(fp, expr);
+    DrawTreeGraph(expr);
 
     LOG_END();
 
-    return (int) DiffErrors::NONE;
+    return (int) ExpressionErrors::NONE;
 }
 
 //-----------------------------------------------------------------------------------------------------
 
-static void TextTreeDump(FILE* fp, const tree_t* tree)
+static void TextExpressionDump(FILE* fp, const expr_t* expr)
 {
-    assert(tree);
+    assert(expr);
 
     fprintf(fp, "<pre>");
 
-    fprintf(fp, "<b>DUMPING TREE</b>\n");
+    fprintf(fp, "<b>DUMPING EXPRESSION</b>\n");
 
-    TreePrintEquation(fp, tree);
+    PrintExpressionTree(fp, expr);
 
     fprintf(fp, "</pre>");
 }
 
 //-----------------------------------------------------------------------------------------------------
 
-static void DrawTreeGraph(const tree_t* tree)
+static void DrawTreeGraph(const expr_t* expr)
 {
-    assert(tree);
+    assert(expr);
 
     FILE* dotf = fopen(DOT_FILE, "w");
 
     StartGraph(dotf);
-    DrawNodes(dotf, tree, tree->root, 1);
+    DrawNodes(dotf, expr, expr->root, 1);
     EndGraph(dotf);
 
     fclose(dotf);
@@ -953,7 +960,7 @@ static void DrawTreeGraph(const tree_t* tree)
 
 //:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::;::::::::::::::::::::::::::
 
-static inline void DrawNodes(FILE* dotf, const tree_t* tree, const Node* node, const int rank)
+static inline void DrawNodes(FILE* dotf, const expr_t* expr, const Node* node, const int rank)
 {
     if (!node) return;
 
@@ -964,12 +971,12 @@ static inline void DrawNodes(FILE* dotf, const tree_t* tree, const Node* node, c
 
     fprintf(dotf, " | data: ");
 
-    PrintNodeData(dotf, tree, node);
+    PrintNodeData(dotf, expr, node);
 
     fprintf(dotf, "} | { left: %p| right: %p } }\"]\n", node->left, node->right);
 
-    DrawNodes(dotf, tree, node->left, rank + 1);
-    DrawNodes(dotf, tree, node->right, rank + 1);
+    DrawNodes(dotf, expr, node->left, rank + 1);
+    DrawNodes(dotf, expr, node->right, rank + 1);
 
     if (node->parent != nullptr)
         fprintf(dotf, "%lld->%lld [color = blue]\n", node, node->parent);

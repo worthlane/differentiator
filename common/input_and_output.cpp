@@ -1,6 +1,7 @@
 #include <ctype.h>
 #include <assert.h>
 #include <stdarg.h>
+#include <time.h>
 
 #include "input_and_output.h"
 #include "colorlib.h"
@@ -26,42 +27,6 @@ void ClearInput(FILE* fp)
 {
     int ch = 0;
     while ((ch = fgetc(fp)) != '\n' && ch != EOF) {}
-}
-
-//------------------------------------------------------------------------------------------------------------------
-
-bool ContinueProgramQuestion(error_t* error)
-{
-    assert(error);
-
-    SayPhrase("Do you want to continue? (1 - Yes): ");
-
-    int ans = false;
-    scanf("%d", &ans);
-    ClearInput(stdin);
-
-    if (ans != 1)
-    {
-        PrintRedText(stdout, "Bye Bye", nullptr);
-        error->code = (int) ERRORS::USER_QUIT;
-    }
-
-    return (ans == 1) ? true : false;
-}
-
-//------------------------------------------------------------------------------------------------------------------
-
-bool AskUserQuestion(const char* question)
-{
-    assert(question);
-
-    PrintGreenText(stdout, "%s (1 - Yes): ", question);
-
-    int ans = false;
-    scanf("%d", &ans);
-    ClearInput(stdin);
-
-    return (ans == 1) ? true : false;
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -103,16 +68,6 @@ static void ReadLine(FILE* fp, char* buf)
         else
             buf[i] = ch;
     }
-}
-
-//-----------------------------------------------------------------------------------------------------
-
-void PrintMenu()
-{
-    PrintCyanText(stdout, "CHOOSE PROGRAM MODE:\n"
-                          "[G]UESS              [C]OMPARE\n"
-                          "[D]ESCRIBE           [P]RINT TREE\n"
-                          "                     [Q]UIT\n", nullptr);
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -175,23 +130,18 @@ const char* GetInputFileName(const int argc, const char* argv[], error_t* error)
 
 //-----------------------------------------------------------------------------------------------------
 
-int SayPhrase(const char *format, ...)
+void PrintPrankPhrase(FILE* fp)
 {
-    va_list arg;
-    int done;
+    static const int   PHRASE_AMT = 5;
+    static const char* PHRASES[] = {"Очевидно, что",
+                                    "Несложно показать, что",
+                                    "При виде формулы становится ясно, что",
+                                    "Нет такого?",
+                                    "Согл?"};
 
-    char buf[MAX_STRING_LEN] = {};
+    srand(time(NULL));
 
-    va_start (arg, format);
-    done = vsnprintf(buf, MAX_STRING_LEN, format, arg);
-    va_end (arg);
+    int nmb = rand() % 5;
 
-    PrintCyanText(stdout, "%s", buf);
-
-    char cmd[MAX_COMMAND_LEN] = {};
-    snprintf(cmd, MAX_COMMAND_LEN, "say %s", buf);
-    system(cmd);
-
-    return done;
+    fprintf(fp, "%s ", PHRASES[nmb]);
 }
-
