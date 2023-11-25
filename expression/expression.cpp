@@ -7,11 +7,9 @@
 #include "graphs.h"
 #include "common/input_and_output.h"
 #include "common/file_read.h"
+#include "common/colorlib.h"
 
-static void              DestructNodes(Node* root);
 static ExpressionErrors  VerifyNodes(const Node* node, error_t* error);
-
-static const double POISON = 0xDEC0;
 
 // ======================================================================
 // EXPRESSION INPUT
@@ -58,8 +56,6 @@ static Operators   DefineOperator(const char* word);
 static void        PrintOperator(FILE* fp, const Operators sign);
 
 static int         GetOperationPriority(const Operators sign);
-static double      OperationWithTwoNumbers(const double number_1, const double number_2,
-                                           const Operators operation, error_t* error);
 
 // ======================================================================
 // EXPRESSION VARIABLES
@@ -72,64 +68,6 @@ static int SaveVariable(variable_t* vars, const char* new_var);
 static int FindVariableAmongSaved(variable_t* vars, const char* new_var);
 
 static const int NO_VARIABLE = -1;
-
-//------------------------------------------------------------------
-
-static double OperationWithTwoNumbers(const double number_1, const double number_2,
-                                      const Operators operation, error_t* error)
-{
-    switch (operation)
-    {
-        case (Operators::ADD):
-            return number_1 + number_2;
-        case (Operators::MUL):
-            return number_1 * number_2;
-        case (Operators::DIV):
-            return number_1 / number_2;
-        case (Operators::SUB):
-            return number_1 - number_2;
-        default:
-            error->code = (int) ExpressionErrors::UNKNOWN_OPERATION;
-            return POISON;
-    }
-}
-
-//------------------------------------------------------------------
-
-double CalculateExpression(expr_t* expr, Node* node, error_t* error)
-{
-    assert(expr);
-    assert(error);
-    assert(node);
-
-    if (node->left == nullptr || node->right == nullptr)
-    {
-        if (node->type == NodeType::NUMBER)             return node->value.val;
-        else if (node->type == NodeType::VARIABLE)      return expr->vars[node->value.var].value;
-        else
-        {
-            error->code = (int) ExpressionErrors::WRONG_EQUATION;
-            return 0;
-        }
-    }
-
-    double left_result  = CalculateExpression(expr, node->left, error);
-    double right_result = CalculateExpression(expr, node->right, error);
-
-    if (node->type != NodeType::OPERATOR)
-    {
-        error->code = (int) ExpressionErrors::WRONG_EQUATION;
-        return 0;
-    }
-
-    double result = OperationWithTwoNumbers(left_result, right_result, node->value.opt, error);
-
-    if (error->code == (int) ExpressionErrors::NONE)
-        return result;
-    else
-        return POISON;
-
-}
 
 //------------------------------------------------------------------
 
@@ -203,10 +141,10 @@ static void PrintNodeData(FILE* fp, const expr_t* expr, const Node* node)
     switch(node->type)
     {
         case (NodeType::NUMBER):
-            fprintf(fp, " %g ", node->value.val);
+            fprintf(fp, "%g", node->value.val);
             break;
         case (NodeType::VARIABLE):
-            fprintf(fp, " %s ", expr->vars[node->value.var].variable_name);
+            fprintf(fp, "%s", expr->vars[node->value.var].variable_name);
             break;
         case (NodeType::OPERATOR):
             PrintOperator(fp, node->value.opt);
@@ -218,25 +156,24 @@ static void PrintNodeData(FILE* fp, const expr_t* expr, const Node* node)
 
 //-----------------------------------------------------------------------------------------------------
 
+#define DEF_OP(name, symb, ...) \
+        case (Operators::name): \
+            fprintf(fp, " ");   \
+            fprintf(fp, name);  \
+            fprintf(fp, " ");   \
+            break;
+
 static void PrintOperator(FILE* fp, const Operators sign)
 {
     switch (sign)
     {
-        case (Operators::ADD):
-            fprintf(fp, ADD);
-            break;
-        case (Operators::SUB):
-            fprintf(fp, SUB);
-            break;
-        case (Operators::MUL):
-            fprintf(fp, MUL);
-            break;
-        case (Operators::DIV):
-            fprintf(fp, DIV);
-            break;
+        #include "operations.h"
+
         default:
             fprintf(fp, " undefined_operator ");
     }
+
+    #undef DEF_OP
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -316,7 +253,7 @@ void ExpressionDtor(expr_t* expr)
 
 //-----------------------------------------------------------------------------------------------------
 
-static void DestructNodes(Node* root)
+void DestructNodes(Node* root)
 {
     if (root->left != nullptr)
         DestructNodes(root->left);
@@ -406,7 +343,7 @@ static void NodesInfixPrint(FILE* fp, const expr_t* expr, const Node* node)
 {
     if (!node) { return; }
 
-    if (node->left == nullptr || node->right == nullptr)
+    if (node->left == nullptr && node->right == nullptr)
     {
         PrintNodeData(fp, expr, node);
         return;
@@ -429,40 +366,35 @@ static void NodesInfixPrint(FILE* fp, const expr_t* expr, const Node* node)
 
 //-----------------------------------------------------------------------------------------------------
 
+#define DEF_OP(name, symb, priority, action, tex, ...)  \
+    case (Operators::name):                             \
+        tex;                                            \
+        break;                                          \
+
 static void NodesInfixPrintLatex(FILE* fp, const expr_t* expr, const Node* node)
 {
     if (!node) { return; }
 
-    if (node->left == nullptr || node->right == nullptr)
+    if (node->left == nullptr && node->right == nullptr)
     {
         PrintNodeData(fp, expr, node);
         return;
     }
 
-    if (node->type == NodeType::OPERATOR && node->value.opt == Operators::DIV)
+    if (node->type == NodeType::OPERATOR)
     {
-        fprintf(fp, "\\frac{");
-        NodesInfixPrintLatex(fp, expr, node->left);
-        fprintf(fp, "}{");
-        NodesInfixPrintLatex(fp, expr, node->right);
-        fprintf(fp, "}");
-        return;
+        switch (node->value.opt)
+        {
+            #include "operations.h"
+
+            default:
+                return;
+        }
     }
 
-    bool need_brackets_on_the_left  = CheckBracketsNeededInEquation(node->left);
-    bool need_brackets_on_the_right = CheckBracketsNeededInEquation(node->right);
-
-    if (need_brackets_on_the_left) fprintf(fp, "(");
-    NodesInfixPrintLatex(fp, expr, node->left);
-    if (need_brackets_on_the_left) fprintf(fp, ")");
-
-    PrintNodeData(fp, expr, node);
-
-    if (need_brackets_on_the_right) fprintf(fp, "(");
-    NodesInfixPrintLatex(fp, expr, node->right);
-    if (need_brackets_on_the_right) fprintf(fp, ")");
-
 }
+
+#undef DEF_OP
 
 //-----------------------------------------------------------------------------------------------------
 
@@ -470,13 +402,15 @@ static bool CheckBracketsNeededInEquation(const Node* node)
 {
     assert(node);
 
+    if (!node) return false;
+
     if (node->type != NodeType::OPERATOR)
         return false;
 
-    int kid_priority    = GetOperationPriority(node->left->value.opt);
+    int kid_priority    = GetOperationPriority(node->value.opt);
     int parent_priority = GetOperationPriority(node->parent->value.opt);
 
-    if (kid_priority < parent_priority)
+    if (kid_priority <= parent_priority)
         return true;
 
     return false;
@@ -484,22 +418,22 @@ static bool CheckBracketsNeededInEquation(const Node* node)
 
 //-----------------------------------------------------------------------------------------------------
 
+#define DEF_OP(name, symb, priority, ...)   \
+        case (Operators::name):             \
+            return priority;                \
+
 static int GetOperationPriority(const Operators sign)
 {
     switch (sign)
     {
-        case (Operators::ADD):
-            return 1;
-        case (Operators::SUB):
-            return 1;
-        case (Operators::MUL):
-            return 2;
-        case (Operators::DIV):
-            return 2;
+        #include "operations.h"
+
         default:
             return 0;
     }
 }
+
+#undef DEF_OP
 
 //-----------------------------------------------------------------------------------------------------
 
@@ -571,11 +505,15 @@ static Node* ReadExpressionAsTree(expr_t* expr, Storage* info, Node* current_nod
     assert(expr);
     assert(info);
 
+    SkipBufSpaces(info);
+
     char opening_bracket_check = CheckOpeningBracketInInput(info);
 
     if (opening_bracket_check == '(')
     {
         Node* new_node = ExpressionReadNewNode(expr, info, current_node, error);
+        if (error->code != (int) ExpressionErrors::NONE)
+            return nullptr;
 
         char closing_bracket_check = Bufgetc(info);
         if (closing_bracket_check != ')')
@@ -647,20 +585,26 @@ static Node* ExpressionReadNewNode(expr_t* expr, Storage* info, Node* parent_nod
     NodeValue val = INIT_VALUE;
 
     Node* left = ReadExpressionAsTree(expr, info, node, error);
+    if (error->code != (int) ExpressionErrors::NONE)
+        return nullptr;
+
+    SkipBufSpaces(info);
 
     ReadNodeData(expr, info, &type, &val, error);
     if (error->code != (int) ExpressionErrors::NONE)
         return nullptr;
 
     Node* right = ReadExpressionAsTree(expr, info, node, error);
+    if (error->code != (int) ExpressionErrors::NONE)
+        return nullptr;
+
+    SkipBufSpaces(info);
 
     node->parent = parent_node;
     node->type   = type;
     node->value  = val;
     node->left   = left;
     node->right  = right;
-
-    SkipBufSpaces(info);
 
     return node;
 }
@@ -711,6 +655,8 @@ static void ReadNodeData(expr_t* expr, Storage* info, NodeType* type, NodeValue*
     char word[MAX_STRING_LEN] = "";
     BufScanfWord(info, word);
 
+    DeleteClosingBracketFromWord(info, word);
+
     Operators sign = DefineOperator(word);
 
     if (sign != Operators::UNK)
@@ -732,7 +678,7 @@ static void ReadNodeData(expr_t* expr, Storage* info, NodeType* type, NodeValue*
     }
     else
     {
-        *type           = NodeType::VARIABLE;
+        *type      = NodeType::VARIABLE;
         value->var = id;
     }
 }
@@ -800,21 +746,22 @@ static bool TryReadNumber(Storage* info, NodeType* type, NodeValue* value)
 
 //-----------------------------------------------------------------------------------------------------
 
+#define DEF_OP(name, symb, ...)                         \
+        if (!strncmp(word, symb, MAX_STRING_LEN))       \
+            return Operators::name;                   \
+        else                                            \
+
+
 static Operators DefineOperator(const char* word)
 {
     assert(word);
 
-    if (!strncmp(word, ADD, MAX_STRING_LEN))
-        return Operators::ADD;
-    else if (!strncmp(word, SUB, MAX_STRING_LEN))
-        return Operators::SUB;
-    else if (!strncmp(word, DIV, MAX_STRING_LEN))
-        return Operators::DIV;
-    else if (!strncmp(word, MUL, MAX_STRING_LEN))
-        return Operators::MUL;
+    #include "operations.h"
 
-    return Operators::UNK;
+    /* else */ return Operators::UNK;
 }
+
+#undef DEF_OP
 
 //-----------------------------------------------------------------------------------------------------
 
@@ -845,7 +792,7 @@ static inline void DeleteClosingBracketFromWord(Storage* info, char* read)
 {
     assert(read);
 
-    size_t bracket_pos = strlen(NIL);
+    size_t bracket_pos = strlen(read) - 1;
     if (read[bracket_pos] == ')')
     {
         read[bracket_pos] = '\0';

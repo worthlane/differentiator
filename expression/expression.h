@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 
+
 #include "common/errors.h"
 #include "common/file_read.h"
 
@@ -53,20 +54,29 @@ int PrintExpressionError(FILE* fp, const void* err, const char* func, const char
 // EXPRESSION OPERATORS
 // ======================================================================
 
+#define DEF_OP(name, ...)      name,
+
 enum class Operators
 {
-    ADD,
-    SUB,
-    MUL,
-    DIV,
+    #include "operations.h"
 
     UNK
 };
 
-static const char* ADD = "+";
+#undef DEF_OP
+
+#define DEF_OP(name, symb, ...)     \
+    static const char* name = symb; \
+
+#include "operations.h"
+
+
+/*static const char* ADD = "+";
 static const char* SUB = "-";
 static const char* DIV = "/";
-static const char* MUL = "*";
+static const char* MUL = "*";*/
+
+#undef DEF_OP
 
 // ======================================================================
 // EXPRESSION VARIABLES
@@ -120,6 +130,7 @@ struct Node
 Node* NodeCtor(const NodeType type, const NodeValue value,
                Node* left, Node* right, Node* parent, error_t* error);
 void  NodeDtor(Node* node);
+void  DestructNodes(Node* root);
 int   NodeDump(FILE* fp, const void* dumping_node, const char* func, const char* file, const int line);
 
 #ifdef DUMP_NODE
@@ -182,8 +193,6 @@ ExpressionErrors ExpressionVerify(const expr_t* expr, error_t* error);
                                                 if (tree_err_ != ExpressionErrors::NONE)                    \
                                                     return tree_err_;                                       \
                                             } while(0)
-
-double CalculateExpression(expr_t* expr, Node* node, error_t* error);
 
 #endif
 

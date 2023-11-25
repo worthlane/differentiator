@@ -19,5 +19,7 @@ typedef long long unsigned int canary_t;
 /// dump function
 typedef int (*dump_f)(FILE*, const void*, const char*, const char*, const int);
 
+static const double POISON = 0xDEC0;
+
 #define PRINT_ELEM_T "%lld"
 
