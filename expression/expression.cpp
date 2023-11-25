@@ -255,6 +255,8 @@ void ExpressionDtor(expr_t* expr)
 
 void DestructNodes(Node* root)
 {
+    if (!root) return;
+
     if (root->left != nullptr)
         DestructNodes(root->left);
 
@@ -400,8 +402,6 @@ static void NodesInfixPrintLatex(FILE* fp, const expr_t* expr, const Node* node)
 
 static bool CheckBracketsNeededInEquation(const Node* node)
 {
-    assert(node);
-
     if (!node) return false;
 
     if (node->type != NodeType::OPERATOR)

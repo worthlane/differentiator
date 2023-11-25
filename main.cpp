@@ -35,5 +35,10 @@ int main(const int argc, const char* argv[])
 
     DUMP_EXPRESSION(&tree);
 
+    SimplifyExpression(&tree, &error);
+    PrintExpressionTreeLatex(stdout, &tree);
+
+    DUMP_EXPRESSION(&tree);
+
     fclose(fp);
 }

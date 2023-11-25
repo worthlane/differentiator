@@ -75,3 +75,74 @@ DEF_OP(DEG, "^", 2, {pow(number_1, number_2)},
     NodesInfixPrintLatex(fp, expr, node->right);
     if (need_brackets_on_the_right) fprintf(fp, ")");
 })
+
+DEF_OP(LOG, "log", 2, {log(number_2)},
+{
+    fprintf(fp, "\\log(");
+    NodesInfixPrintLatex(fp, expr, node->right);
+    fprintf(fp, ")");
+})
+
+DEF_OP(EXP, "exp", 2, {exp(number_2)},
+{
+    fprintf(fp, "\\exp(");
+    NodesInfixPrintLatex(fp, expr, node->right);
+    fprintf(fp, ")");
+})
+
+DEF_OP(SIN, "sin", 2, {sin(number_2)},
+{
+    fprintf(fp, "\\sin(");
+    NodesInfixPrintLatex(fp, expr, node->right);
+    fprintf(fp, ")");
+})
+
+DEF_OP(COS, "cos", 2, {cos(number_2)},
+{
+    fprintf(fp, "\\cos(");
+    NodesInfixPrintLatex(fp, expr, node->right);
+    fprintf(fp, ")");
+})
+
+DEF_OP(COT, "ctg", 2, {1/tan(number_2)},
+{
+    fprintf(fp, "\\cot(");
+    NodesInfixPrintLatex(fp, expr, node->right);
+    fprintf(fp, ")");
+})
+
+DEF_OP(TAN, "tg", 2, {tan(number_2)},
+{
+    fprintf(fp, "\\tan(");
+    NodesInfixPrintLatex(fp, expr, node->right);
+    fprintf(fp, ")");
+})
+
+DEF_OP(ARCSIN, "arcsin", 2, {asin(number_2)},
+{
+    fprintf(fp, "\\arcsin(");
+    NodesInfixPrintLatex(fp, expr, node->right);
+    fprintf(fp, ")");
+})
+
+DEF_OP(ARCCOS, "arccos", 2, {acos(number_2)},
+{
+    fprintf(fp, "\\arccos(");
+    NodesInfixPrintLatex(fp, expr, node->right);
+    fprintf(fp, ")");
+})
+
+DEF_OP(ARCCOT, "arcctg", 2, {M_PI/2 - atan(number_2)},
+{
+    fprintf(fp, "\\arccot(");
+    NodesInfixPrintLatex(fp, expr, node->right);
+    fprintf(fp, ")");
+})
+
+DEF_OP(ARCTAN, "arctg", 2, {atan(number_2)},
+{
+    fprintf(fp, "\\arctan(");
+    NodesInfixPrintLatex(fp, expr, node->right);
+    fprintf(fp, ")");
+})
+
