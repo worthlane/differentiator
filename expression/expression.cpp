@@ -61,37 +61,31 @@ static int         GetOperationPriority(const Operators sign);
 // EXPRESSION VARIABLES
 // ======================================================================
 
-static void InitVariablesArray(variable_t* variables, size_t size);
-static void DestructVariablesArray(variable_t* variables, size_t size);
+static void InitVariablesArray(variable_t* variables);
 
 static int SaveVariable(variable_t* vars, const char* new_var);
-static int FindVariableAmongSaved(variable_t* vars, const char* new_var);
-
-static const int NO_VARIABLE = -1;
 
 //------------------------------------------------------------------
 
-static void InitVariablesArray(variable_t* variables, size_t size)
+static void InitVariablesArray(variable_t* variables)
 {
     assert(variables);
-    assert(size <= MAX_VARIABLES_AMT);
 
-    for (size_t i = 0; i < size; i++)
+    for (size_t i = 0; i < MAX_VARIABLES_AMT; i++)
     {
         variables[i].isfree        = true;
-        variables[i].variable_name = nullptr;
+        variables[i].variable_name = "";
         variables[i].value         = 0;
     }
 }
 
 //------------------------------------------------------------------
 
-static void DestructVariablesArray(variable_t* variables, size_t size)
+void DestructVariablesArray(variable_t* variables)
 {
     assert(variables);
-    assert(size <= MAX_VARIABLES_AMT);
 
-    for (size_t i = 0; i < size; i++)
+    for (size_t i = 0; i < MAX_VARIABLES_AMT; i++)
     {
         free(variables[i].variable_name);
         variables[i].isfree = true;
@@ -101,7 +95,23 @@ static void DestructVariablesArray(variable_t* variables, size_t size)
 
 //-----------------------------------------------------------------------------------------------------
 
-Node* NodeCtor(const NodeType type, const NodeValue value,
+bool FindVarInTree(Node* node, const int id)
+{
+    if (!node)
+        return false;
+
+    if (node->type == NodeType::VARIABLE && node->value.var == id)
+        return true;
+
+    bool var_in_left_subtree  = FindVarInTree(node->left, id);
+    bool var_in_right_subtree = FindVarInTree(node->right, id);
+
+    return (var_in_left_subtree || var_in_right_subtree);
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+Node* MakeNode(const NodeType type, const NodeValue value,
                Node* left, Node* right, Node* parent, error_t* error)
 {
     assert(error);
@@ -130,6 +140,23 @@ void NodeDtor(Node* node)
     assert(node);
 
     free(node);
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+void ConnectNodesWithParents(Node* node)
+{
+    if (!node) return;
+
+    ConnectNodesWithParents(node->left);
+    ConnectNodesWithParents(node->right);
+
+    if (node->left != nullptr)
+        node->left->parent = node;
+
+    if (node->right != nullptr)
+        node->right->parent = node;
+
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -198,19 +225,29 @@ static void PrintNodeDataType(FILE* fp, const NodeType type)
 
 //-----------------------------------------------------------------------------------------------------
 
-ExpressionErrors ExpressionCtor(expr_t* expr, error_t* error)
+variable_t* AllocVariablesArray(error_t* error)
 {
-    Node* root = NodeCtor(INIT_TYPE, INIT_VALUE, nullptr, nullptr, nullptr, error);
-    RETURN_IF_EXPRESSION_ERROR((ExpressionErrors) error->code);
-
     variable_t* vars = (variable_t*) calloc(MAX_VARIABLES_AMT, sizeof(variable_t));
     if (vars == nullptr)
     {
         error->code = (int) ExpressionErrors::ALLOCATE_MEMORY;
         error->data = "VARIABLES ARRAY";
-        return ExpressionErrors::ALLOCATE_MEMORY;
+        return nullptr;
     }
-    InitVariablesArray(vars, MAX_VARIABLES_AMT);
+
+    return vars;
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+ExpressionErrors ExpressionCtor(expr_t* expr, error_t* error)
+{
+    Node* root = MakeNode(INIT_TYPE, ZERO_VALUE, nullptr, nullptr, nullptr, error);
+    RETURN_IF_EXPRESSION_ERROR((ExpressionErrors) error->code);
+
+    variable_t* vars = AllocVariablesArray(error);
+    RETURN_IF_EXPRESSION_ERROR((ExpressionErrors) error->code);
+    InitVariablesArray(vars);
 
     expr->vars = vars;
     expr->root = root;
@@ -246,7 +283,7 @@ void ExpressionDtor(expr_t* expr)
 {
     DestructNodes(expr->root);
 
-    DestructVariablesArray(expr->vars, MAX_VARIABLES_AMT);
+    DestructVariablesArray(expr->vars);
     free(expr->vars);
     expr->root = nullptr;
 }
@@ -287,7 +324,7 @@ int PrintExpressionError(FILE* fp, const void* err, const char* func, const char
             LOG_END();
             return (int) error->code;
 
-        case (ExpressionErrors::EMPTY_TREE):
+        case (ExpressionErrors::NO_EXPRESSION):
             fprintf(fp, "EXPRESSION TREE IS EMPTY<br>\n");
             LOG_END();
             return (int) error->code;
@@ -306,6 +343,21 @@ int PrintExpressionError(FILE* fp, const void* err, const char* func, const char
         case (ExpressionErrors::COMMON_HEIR):
             fprintf(fp, "NODE'S HEIRS ARE SAME<br>\n");
             DUMP_NODE(error->data);
+            LOG_END();
+            return (int) error->code;
+
+        case (ExpressionErrors::INVALID_EXPRESSION_FORMAT):
+            fprintf(fp, "EXPRESSION FORMAT IS WRONG<br>\n");
+            LOG_END();
+            return (int) error->code;
+
+        case (ExpressionErrors::UNKNOWN_OPERATION):
+            fprintf(fp, "UNKNOWN OPERATION<br>\n"); // TODO add data
+            LOG_END();
+            return (int) error->code;
+
+        case (ExpressionErrors::NO_DIFF_VARIABLE):
+            fprintf(fp, "DID NOT FOUND \"%s\" IN EXPRESSION<br>\n", (const char*) error->data);
             LOG_END();
             return (int) error->code;
 
@@ -449,7 +501,7 @@ void ExpressionInfixRead(Storage* info, expr_t* expr, error_t* error)
 
     if (ch == EOF)
     {
-        error->code = (int) ExpressionErrors::EMPTY_TREE;
+        error->code = (int) ExpressionErrors::NO_EXPRESSION;
         return;
     }
     else
@@ -475,7 +527,7 @@ void ExpressionPrefixRead(Storage* info, expr_t* expr, error_t* error)
 
     if (ch == EOF)
     {
-        error->code = (int) ExpressionErrors::EMPTY_TREE;
+        error->code = (int) ExpressionErrors::NO_EXPRESSION;
         return;
     }
     else
@@ -579,10 +631,10 @@ static Node* ExpressionReadNewNode(expr_t* expr, Storage* info, Node* parent_nod
     assert(info);
     assert(error);
 
-    Node* node = NodeCtor(INIT_TYPE, INIT_VALUE, nullptr, nullptr, nullptr, error);
+    Node* node = MakeNode(INIT_TYPE, ZERO_VALUE, nullptr, nullptr, nullptr, error);
 
     NodeType type = INIT_TYPE;
-    NodeValue val = INIT_VALUE;
+    NodeValue val = ZERO_VALUE;
 
     Node* left = ReadExpressionAsTree(expr, info, node, error);
     if (error->code != (int) ExpressionErrors::NONE)
@@ -617,10 +669,10 @@ static Node* PrefixReadNewNode(expr_t* expr, Storage* info, Node* parent_node, e
     assert(info);
     assert(error);
 
-    Node* node = NodeCtor(INIT_TYPE, INIT_VALUE, nullptr, nullptr, nullptr, error);
+    Node* node = MakeNode(INIT_TYPE, ZERO_VALUE, nullptr, nullptr, nullptr, error);
 
     NodeType type = INIT_TYPE;
-    NodeValue val = INIT_VALUE;
+    NodeValue val = ZERO_VALUE;
 
     ReadNodeData(expr, info, &type, &val, error);
     if (error->code != (int) ExpressionErrors::NONE)
@@ -674,7 +726,7 @@ static void ReadNodeData(expr_t* expr, Storage* info, NodeType* type, NodeValue*
     if (id == NO_VARIABLE)
     {
         *type = NodeType::POISON;
-        error->code = (int) ExpressionErrors::UNKNOWN_INPUT;
+        error->code = (int) ExpressionErrors::INVALID_SYNTAX;
     }
     else
     {
@@ -685,7 +737,7 @@ static void ReadNodeData(expr_t* expr, Storage* info, NodeType* type, NodeValue*
 
 //-----------------------------------------------------------------------------------------------------
 
-static int FindVariableAmongSaved(variable_t* vars, const char* new_var)
+int FindVariableAmongSaved(variable_t* vars, const char* new_var)
 {
     assert(new_var);
 
@@ -720,6 +772,7 @@ static int SaveVariable(variable_t* vars, const char* new_var)
         {
             id = i;
             vars[i].variable_name = strndup(new_var, MAX_VARIABLE_LEN);
+            vars[i].isfree = false;
             return id;
         }
     }

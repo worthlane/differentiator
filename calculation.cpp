@@ -1,31 +1,64 @@
 #include <math.h>
+#include <string.h>
 
 #include "calculation.h"
 
-static int global_transformarion_counter = 0;
+#include "operations_dsl.h"
+
+
+// ======================================================================
+// CALCULATIONS
+// ======================================================================
+
+static const double EPSILON  = 1e-9;
 
 static double OperationWithTwoNumbers(const double number_1, const double number_2,
                                       const Operators operation, error_t* error);
 
-static void SimplifyExpressionConstants(expr_t* expr, Node* node, int* transform_amt, error_t* error);
-static void SimplifyExpressionNeutrals(expr_t* expr, Node* node, int* transform_amt, error_t* error);
+static bool AreEqual(const double a, const double b);
 
 static void RecalculateExpressionRightSubtree(expr_t* expr, Node* node, error_t* error);
 static void RecalculateExpressionLeftSubtree(expr_t* expr, Node* node, error_t* error);
 static void RecalculateExpressionSubtrees(expr_t* expr, Node* node, error_t* error);
 
+// ======================================================================
+// SIMPLIFYING
+// ======================================================================
+
+static void SimplifyExpressionConstants(expr_t* expr, Node* node, int* transform_amt, error_t* error);
+static void SimplifyExpressionNeutrals(expr_t* expr, Node* node, int* transform_amt, error_t* error);
+
 static void ReconnectNodesKidWithParent(expr_t* expr, Node* cur_node, Node* kid);
-
-static bool AreEqual(const double a, const double b);
-
-static const double EPSILON  = 1e-9;
-
 
 static void RemoveNeutralADD(expr_t* expr, Node* node, int* transform_cnt, error_t* error);
 static void RemoveNeutralSUB(expr_t* expr, Node* node, int* transform_cnt, error_t* error);
 static void RemoveNeutralDIV(expr_t* expr, Node* node, int* transform_cnt, error_t* error);
 static void RemoveNeutralMUL(expr_t* expr, Node* node, int* transform_cnt, error_t* error);
 static void RemoveNeutralDEG(expr_t* expr, Node* node, int* transform_cnt, error_t* error);
+
+// ======================================================================
+// DIFFERENTIATING
+// ======================================================================
+
+static Node* Copy(Node* node, error_t* error);
+
+static Node* Differentiate(Node* node, const int id, error_t* error);
+
+static inline Node* DifferentiateADD(Node* node, const int id, error_t* error);
+static inline Node* DifferentiateSUB(Node* node, const int id, error_t* error);
+static inline Node* DifferentiateMUL(Node* node, const int id, error_t* error);
+static inline Node* DifferentiateDIV(Node* node, const int id, error_t* error);
+static inline Node* DifferentiateDEG(Node* node, const int id, error_t* error);
+static inline Node* DifferentiateEXP(Node* node, const int id, error_t* error);
+static inline Node* DifferentiateLN(Node* node, const int id, error_t* error);
+static inline Node* DifferentiateSIN(Node* node, const int id, error_t* error);
+static inline Node* DifferentiateCOS(Node* node, const int id, error_t* error);
+static inline Node* DifferentiateTAN(Node* node, const int id, error_t* error);
+static inline Node* DifferentiateCOT(Node* node, const int id, error_t* error);
+static inline Node* DifferentiateARCSIN(Node* node, const int id, error_t* error);
+static inline Node* DifferentiateARCCOS(Node* node, const int id, error_t* error);
+static inline Node* DifferentiateARCTAN(Node* node, const int id, error_t* error);
+static inline Node* DifferentiateARCCOT(Node* node, const int id, error_t* error);
 
 //------------------------------------------------------------------
 
@@ -74,7 +107,7 @@ double CalculateExpression(expr_t* expr, Node* node, error_t* error)
         else if (node->type == NodeType::VARIABLE)      return expr->vars[node->value.var].value;
         else
         {
-            error->code = (int) ExpressionErrors::WRONG_EQUATION;
+            error->code = (int) ExpressionErrors::INVALID_EXPRESSION_FORMAT;
             return 0;
         }
     }
@@ -84,7 +117,7 @@ double CalculateExpression(expr_t* expr, Node* node, error_t* error)
 
     if (node->type != NodeType::OPERATOR)
     {
-        error->code = (int) ExpressionErrors::WRONG_EQUATION;
+        error->code = (int) ExpressionErrors::INVALID_EXPRESSION_FORMAT;
         return 0;
     }
 
@@ -221,7 +254,7 @@ static void SimplifyExpressionNeutrals(expr_t* expr, Node* node, int* transform_
 
     if (node->type != NodeType::OPERATOR)
     {
-        error->code = (int) ExpressionErrors::WRONG_EQUATION;
+        error->code = (int) ExpressionErrors::INVALID_EXPRESSION_FORMAT;
         return;
     }
 
@@ -290,7 +323,7 @@ static void RemoveNeutralADD(expr_t* expr, Node* node, int* transform_cnt, error
 
     if (node->left == nullptr || node->right == nullptr)
     {
-        error->code = (int) ExpressionErrors::WRONG_EQUATION;
+        error->code = (int) ExpressionErrors::INVALID_EXPRESSION_FORMAT;
         return;
     }
 
@@ -323,7 +356,7 @@ static void RemoveNeutralSUB(expr_t* expr, Node* node, int* transform_cnt, error
 
     if (node->left == nullptr || node->right == nullptr)
     {
-        error->code = (int) ExpressionErrors::WRONG_EQUATION;
+        error->code = (int) ExpressionErrors::INVALID_EXPRESSION_FORMAT;
         return;
     }
 
@@ -336,9 +369,10 @@ static void RemoveNeutralSUB(expr_t* expr, Node* node, int* transform_cnt, error
         return;
     }
 
-    if ((node->right->type      == NodeType::NUMBER   &&
-         node->left->type       == NodeType::NUMBER)  &&
-         node->right->value.var == node->left->value.var);
+
+    if ((node->right->type      == NodeType::VARIABLE   &&
+         node->left->type       == NodeType::VARIABLE)  &&
+         node->right->value.var == node->left->value.var)
     {
         (*transform_cnt)++;
 
@@ -363,7 +397,7 @@ static void RemoveNeutralDIV(expr_t* expr, Node* node, int* transform_cnt, error
 
     if (node->left == nullptr || node->right == nullptr)
     {
-        error->code = (int) ExpressionErrors::WRONG_EQUATION;
+        error->code = (int) ExpressionErrors::INVALID_EXPRESSION_FORMAT;
         return;
     }
 
@@ -387,7 +421,7 @@ static void RemoveNeutralMUL(expr_t* expr, Node* node, int* transform_cnt, error
 
     if (node->left == nullptr || node->right == nullptr)
     {
-        error->code = (int) ExpressionErrors::WRONG_EQUATION;
+        error->code = (int) ExpressionErrors::INVALID_EXPRESSION_FORMAT;
         return;
     }
 
@@ -441,7 +475,7 @@ static void RemoveNeutralDEG(expr_t* expr, Node* node, int* transform_cnt, error
 
     if (node->left == nullptr || node->right == nullptr)
     {
-        error->code = (int) ExpressionErrors::WRONG_EQUATION;
+        error->code = (int) ExpressionErrors::INVALID_EXPRESSION_FORMAT;
         return;
     }
 
@@ -499,4 +533,255 @@ void SimplifyExpression(expr_t* expr, error_t* error)
         if (error->code != (int) ExpressionErrors::NONE)
             return;
     }
+}
+
+//------------------------------------------------------------------
+
+#define DEF_OP(name, ...)                                   \
+        case (Operators::name):                             \
+            return Differentiate##name(node, id, error);    \
+
+
+static Node* Differentiate(Node* node, const int id, error_t* error)
+{
+    assert(error);
+
+    if (!node)  return nullptr;
+
+    if (node->type == NodeType::POISON)
+    {
+        error->code = (int) ExpressionErrors::INVALID_EXPRESSION_FORMAT;
+        return nullptr;
+    }
+
+    if (node->type == NodeType::NUMBER ||
+       (node->type == NodeType::VARIABLE && node->value.var != id))
+        return NUM(0);
+
+    if (node->type == NodeType::VARIABLE)
+        return NUM(1);
+
+    switch (node->value.opt)
+    {
+        #include "operations.h"
+
+        default:
+            return nullptr;
+    }
+
+    return nullptr;
+}
+
+#undef DEF_OP
+
+// ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+static inline Node* DifferentiateADD(Node* node, const int id, error_t* error)
+{
+    assert(node);
+
+    return _ADD(d(node->left), d(node->right));
+}
+
+// ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+static inline Node* DifferentiateSUB(Node* node, const int id, error_t* error)
+{
+    assert(node);
+
+    return _SUB(d(node->left), d(node->right));
+}
+
+// ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+static inline Node* DifferentiateMUL(Node* node, const int id, error_t* error)
+{
+    assert(node);
+
+    return _ADD(_MUL(d(node->left), CPY(node->right)), _MUL(CPY(node->left), d(node->right)));;
+}
+
+// ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+static inline Node* DifferentiateDIV(Node* node, const int id, error_t* error)
+{
+    assert(node);
+
+    return _DIV(_SUB(_MUL(d(node->left), CPY(node->right)), _MUL(CPY(node->left), d(node->right))),
+                _DEG(CPY(node->right), NUM(2)));
+}
+
+// ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+static inline Node* DifferentiateDEG(Node* node, const int id, error_t* error)
+{
+    assert(node);
+
+    bool has_var_in_base = FindVarInTree(node->left, id);
+    bool has_var_in_deg  = FindVarInTree(node->right, id);
+
+    if (has_var_in_base && has_var_in_deg)
+    {
+        return _MUL(_ADD(_MUL(d(node->right), _LN(CPY(node->left))),
+                         _MUL(CPY(node->right), _DIV(d(node->left), CPY(node->left)))),
+                    CPY(node));
+    }
+    else if (has_var_in_base)
+    {
+        return _MUL(CPY(node->right), _DEG(node->left, _SUB(CPY(node->right), NUM(1))));
+    }
+    else if (has_var_in_deg)
+    {
+        return _MUL(_LN(node->left), CPY(node->right));
+    }
+    else
+        return NUM(0);
+}
+
+// ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+static inline Node* DifferentiateEXP(Node* node, const int id, error_t* error)
+{
+    assert(node);
+
+    return _MUL(d(node->right), CPY(node));
+}
+
+// ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+static inline Node* DifferentiateLN(Node* node, const int id, error_t* error)
+{
+    assert(node);
+
+    return _MUL(d(node->right), _DIV(NUM(1), CPY(node->right)));
+}
+
+// ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+static inline Node* DifferentiateSIN(Node* node, const int id, error_t* error)
+{
+    assert(node);
+
+    return _MUL(d(node->right), _COS(CPY(node->right)));
+}
+
+// ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+static inline Node* DifferentiateCOS(Node* node, const int id, error_t* error)
+{
+    assert(node);
+
+    return _MUL(NUM(-1), _MUL(d(node->right), _SIN(CPY(node->right))));
+}
+
+// ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+static inline Node* DifferentiateTAN(Node* node, const int id, error_t* error)
+{
+    assert(node);
+
+    return _MUL(d(node->right), _DIV(NUM(1), _DEG(_COS(node->right), NUM(2))));
+}
+
+// ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+static inline Node* DifferentiateCOT(Node* node, const int id, error_t* error)
+{
+    assert(node);
+
+    return _MUL(NUM(-1), _MUL(d(node->right), _DIV(NUM(1), _DEG(_SIN(node->right), NUM(2)))));
+}
+
+// ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+static inline Node* DifferentiateARCSIN(Node* node, const int id, error_t* error)
+{
+    assert(node);
+
+    return _DEG(_SUB(NUM(1), _DEG(CPY(node->right), NUM(2))), NUM(-0.5));
+}
+
+// ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+static inline Node* DifferentiateARCCOS(Node* node, const int id, error_t* error)
+{
+    assert(node);
+
+    return _MUL(NUM(-1), _DEG(_SUB(NUM(1), _DEG(CPY(node->right), NUM(2))), NUM(-0.5)));
+}
+
+// ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+static inline Node* DifferentiateARCTAN(Node* node, const int id, error_t* error)
+{
+    assert(node);
+
+    return _DIV(NUM(1), _ADD(NUM(1), _DEG(CPY(node->right), NUM(2))));
+}
+
+// ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+static inline Node* DifferentiateARCCOT(Node* node, const int id, error_t* error)
+{
+    assert(node);
+
+    return _DIV(NUM(-1), _ADD(NUM(1), _DEG(CPY(node->right), NUM(2))));
+}
+
+
+//------------------------------------------------------------------
+
+static Node* Copy(Node* node, error_t* error)
+{
+    if (!node) return nullptr;
+
+    return MakeNode(node->type, node->value, Copy(node->left, error), Copy(node->right, error), nullptr, error);
+}
+
+//------------------------------------------------------------------
+
+expr_t* DifferentiateExpression(expr_t* expr, const char* var, error_t* error)
+{
+    assert(var);
+    assert(expr);
+    assert(error);
+
+    int var_id = FindVariableAmongSaved(expr->vars, var);
+    if (var_id == NO_VARIABLE)
+    {
+        error->code = (int) ExpressionErrors::NO_DIFF_VARIABLE;
+        error->data = var;
+        return nullptr;
+    }
+
+    expr_t* d_expr = MakeExpression(error);
+    if (error->code != (int) ExpressionErrors::NONE)
+        return nullptr;
+
+    variable_t* vars = AllocVariablesArray(error);
+    if (error->code != (int) ExpressionErrors::NONE)
+        return nullptr;
+
+    void* success = memcpy(vars, expr->vars, MAX_VARIABLES_AMT * sizeof(variable_t));
+    if (!success)
+    {
+        error->code = (int) ExpressionErrors::ALLOCATE_MEMORY;
+        error->data = "VARIABLES ARRAY";
+        return nullptr;
+    }
+
+    SimplifyExpression(expr, error);
+
+    Node* root = Differentiate(expr->root, var_id, error);
+    if (error->code != (int) ExpressionErrors::NONE)
+        return nullptr;
+
+    ConnectNodesWithParents(root);
+
+    d_expr->root = root;
+    d_expr->vars = vars;
+
+    SimplifyExpression(d_expr, error);
+
+    return d_expr;
 }

@@ -16,13 +16,13 @@ enum class ExpressionErrors
     NONE = 0,
 
     ALLOCATE_MEMORY,
-    EMPTY_TREE,
+    NO_EXPRESSION,
     INVALID_SYNTAX,
     CYCLED_NODE,
     COMMON_HEIR,
-    UNKNOWN_INPUT,
-    WRONG_EQUATION,
+    INVALID_EXPRESSION_FORMAT,
     UNKNOWN_OPERATION,
+    NO_DIFF_VARIABLE,
 
     UNKNOWN
 };
@@ -70,12 +70,6 @@ enum class Operators
 
 #include "operations.h"
 
-
-/*static const char* ADD = "+";
-static const char* SUB = "-";
-static const char* DIV = "/";
-static const char* MUL = "*";*/
-
 #undef DEF_OP
 
 // ======================================================================
@@ -92,7 +86,13 @@ struct VariableInfo
 typedef struct VariableInfo variable_t;
 
 static const size_t MAX_VARIABLES_AMT = 50;
-static const size_t MAX_VARIABLE_LEN = 100;
+static const size_t MAX_VARIABLE_LEN  = 100;
+static const int    NO_VARIABLE       = -1;
+
+variable_t* AllocVariablesArray(error_t* error);
+void        DestructVariablesArray(variable_t* variables);
+
+int         FindVariableAmongSaved(variable_t* vars, const char* new_var);
 
 // ======================================================================
 // EXPRESSION TREE NODES
@@ -114,7 +114,7 @@ union NodeValue
     Operators   opt;
     int         var;
 };
-static const NodeValue INIT_VALUE = {0};
+static const NodeValue ZERO_VALUE = {.val = 0};
 
 struct Node
 {
@@ -127,7 +127,7 @@ struct Node
     Node* right;
 };
 
-Node* NodeCtor(const NodeType type, const NodeValue value,
+Node* MakeNode(const NodeType type, const NodeValue value,
                Node* left, Node* right, Node* parent, error_t* error);
 void  NodeDtor(Node* node);
 void  DestructNodes(Node* root);
@@ -152,6 +152,10 @@ ExpressionErrors NodeVerify(const Node* node, error_t* error);
                                         if (node_err_ != ExpressionErrors::NONE)                          \
                                             return node_err_;                                       \
                                     } while(0)
+
+void ConnectNodesWithParents(Node* node);
+
+bool FindVarInTree(Node* node, const int id);
 
 // ======================================================================
 // EXPRESSION STRUCT
@@ -195,4 +199,5 @@ ExpressionErrors ExpressionVerify(const expr_t* expr, error_t* error);
                                             } while(0)
 
 #endif
+
 

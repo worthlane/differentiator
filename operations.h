@@ -76,9 +76,9 @@ DEF_OP(DEG, "^", 2, {pow(number_1, number_2)},
     if (need_brackets_on_the_right) fprintf(fp, ")");
 })
 
-DEF_OP(LOG, "log", 2, {log(number_2)},
+DEF_OP(LN, "ln", 2, {log(number_2)},
 {
-    fprintf(fp, "\\log(");
+    fprintf(fp, "\\ln(");
     NodesInfixPrintLatex(fp, expr, node->right);
     fprintf(fp, ")");
 })

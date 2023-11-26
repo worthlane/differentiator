@@ -11,9 +11,9 @@ int main(const int argc, const char* argv[])
 {
     OpenLogFile(argv[0]);
 
-    expr_t  tree  = {};
+    expr_t  expr  = {};
     error_t error = {};
-    ExpressionCtor(&tree, &error);
+    ExpressionCtor(&expr, &error);
 
     const char* data_file = GetInputFileName(argc, argv, &error);
     EXIT_IF_ERROR(&error);
@@ -24,21 +24,26 @@ int main(const int argc, const char* argv[])
     Storage info = {};
     CreateTextStorage(&info, &error, data_file);
 
-    ExpressionInfixRead(&info, &tree, &error);
+    ExpressionInfixRead(&info, &expr, &error);
     EXIT_IF_EXPRESSION_ERROR(&error);
 
-    PrintExpressionTree(stdout, &tree);
+    PrintExpressionTree(stdout, &expr);
 
-    printf("%lf\n", CalculateExpression(&tree, tree.root, &error));
+    printf("%lf\n", CalculateExpression(&expr, expr.root, &error));
 
-    PrintExpressionTreeLatex(stdout, &tree);
+    PrintExpressionTreeLatex(stdout, &expr);
 
-    DUMP_EXPRESSION(&tree);
+    DUMP_EXPRESSION(&expr);
 
-    SimplifyExpression(&tree, &error);
-    PrintExpressionTreeLatex(stdout, &tree);
+    SimplifyExpression(&expr, &error);
+    PrintExpressionTreeLatex(stdout, &expr);
 
-    DUMP_EXPRESSION(&tree);
+    expr_t* d_expr = DifferentiateExpression(&expr, "x", &error);
+    EXIT_IF_EXPRESSION_ERROR(&error);
+
+    PrintExpressionTreeLatex(stdout, d_expr);
+
+    DUMP_EXPRESSION(d_expr);
 
     fclose(fp);
 }
