@@ -112,17 +112,11 @@ bool FindVarInTree(Node* node, const int id)
 //-----------------------------------------------------------------------------------------------------
 
 Node* MakeNode(const NodeType type, const NodeValue value,
-               Node* left, Node* right, Node* parent, error_t* error)
+               Node* left, Node* right, Node* parent)
 {
-    assert(error);
-
     Node* node = (Node*) calloc(1, sizeof(Node));
     if (node == nullptr)
-    {
-        error->code = (int) ExpressionErrors::ALLOCATE_MEMORY;
-        error->data = "NODE";
         return nullptr;
-    }
 
     node->type   = type;
     node->value  = value;
@@ -242,8 +236,7 @@ variable_t* AllocVariablesArray(error_t* error)
 
 ExpressionErrors ExpressionCtor(expr_t* expr, error_t* error)
 {
-    Node* root = MakeNode(INIT_TYPE, ZERO_VALUE, nullptr, nullptr, nullptr, error);
-    RETURN_IF_EXPRESSION_ERROR((ExpressionErrors) error->code);
+    Node* root = MakeNode(INIT_TYPE, ZERO_VALUE, nullptr, nullptr, nullptr);
 
     variable_t* vars = AllocVariablesArray(error);
     RETURN_IF_EXPRESSION_ERROR((ExpressionErrors) error->code);
@@ -420,10 +413,10 @@ static void NodesInfixPrint(FILE* fp, const expr_t* expr, const Node* node)
 
 //-----------------------------------------------------------------------------------------------------
 
-#define DEF_OP(name, symb, priority, action, tex, ...)  \
-    case (Operators::name):                             \
-        tex;                                            \
-        break;                                          \
+#define DEF_OP(name, symb, priority, arg_amt, action, tex, ...)     \
+    case (Operators::name):                                         \
+        tex;                                                        \
+        break;                                                      \
 
 static void NodesInfixPrintLatex(FILE* fp, const expr_t* expr, const Node* node)
 {
@@ -631,7 +624,7 @@ static Node* ExpressionReadNewNode(expr_t* expr, Storage* info, Node* parent_nod
     assert(info);
     assert(error);
 
-    Node* node = MakeNode(INIT_TYPE, ZERO_VALUE, nullptr, nullptr, nullptr, error);
+    Node* node = MakeNode(INIT_TYPE, ZERO_VALUE, nullptr, nullptr, nullptr);
 
     NodeType type = INIT_TYPE;
     NodeValue val = ZERO_VALUE;
@@ -669,7 +662,7 @@ static Node* PrefixReadNewNode(expr_t* expr, Storage* info, Node* parent_node, e
     assert(info);
     assert(error);
 
-    Node* node = MakeNode(INIT_TYPE, ZERO_VALUE, nullptr, nullptr, nullptr, error);
+    Node* node = MakeNode(INIT_TYPE, ZERO_VALUE, nullptr, nullptr, nullptr);
 
     NodeType type = INIT_TYPE;
     NodeValue val = ZERO_VALUE;

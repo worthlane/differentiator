@@ -128,7 +128,7 @@ struct Node
 };
 
 Node* MakeNode(const NodeType type, const NodeValue value,
-               Node* left, Node* right, Node* parent, error_t* error);
+               Node* left, Node* right, Node* parent);
 void  NodeDtor(Node* node);
 void  DestructNodes(Node* root);
 int   NodeDump(FILE* fp, const void* dumping_node, const char* func, const char* file, const int line);
