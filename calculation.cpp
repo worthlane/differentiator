@@ -78,7 +78,13 @@ static void RemoveNeutralDEG(expr_t* expr, Node* node, int* transform_cnt, error
 
 static Node* Copy(Node* node);
 
-static Node* Differentiate(Node* node, const int id, error_t* error);
+static Node*   Differentiate(Node* node, const int id, error_t* error);
+static expr_t* DifferentiateExpression(expr_t* expr, const int var_id, error_t* error);
+
+static void    CopyExpressionWithSameVar(expr_t* expr, const int var_id,
+                                         expr_t** new_expr, variable_t** new_vars, error_t* error);
+static void    CopyExpressionWithSameVar(expr_t* expr, const char* var, int* id,
+                                         expr_t** new_expr, variable_t** new_vars, error_t* error);
 
 static inline int Factorial(const int n);
 
@@ -611,10 +617,14 @@ static Node* Copy(Node* node)
 
 //------------------------------------------------------------------
 
-expr_t* DifferentiateExpression(expr_t* expr, const char* var, error_t* error)
+static void CopyExpressionWithSameVar(expr_t* expr, const char* var, int* id,
+                                      expr_t** new_expr, variable_t** new_vars, error_t* error)
 {
-    assert(var);
     assert(expr);
+    assert(new_expr);
+    assert(var);
+    assert(id);
+    assert(new_vars);
     assert(error);
 
     int var_id = FindVariableAmongSaved(expr->vars, var);
@@ -622,26 +632,85 @@ expr_t* DifferentiateExpression(expr_t* expr, const char* var, error_t* error)
     {
         error->code = (int) ExpressionErrors::NO_DIFF_VARIABLE;
         error->data = var;
-        return nullptr;
+        return;
     }
 
     expr_t* d_expr = MakeExpression(error);
     if (error->code != (int) ExpressionErrors::NONE)
-        return nullptr;
+        return;
 
     variable_t* vars = AllocVariablesArray(error);
     if (error->code != (int) ExpressionErrors::NONE)
-        return nullptr;
+        return;
 
     void* success = memcpy(vars, expr->vars, MAX_VARIABLES_AMT * sizeof(variable_t));
     if (!success)
     {
         error->code = (int) ExpressionErrors::ALLOCATE_MEMORY;
         error->data = "VARIABLES ARRAY";
-        return nullptr;
+        return;
     }
 
+    *id       = var_id;
+    *new_expr = d_expr;
+    *new_vars = vars;
+
     SimplifyExpression(expr, error);
+}
+
+//------------------------------------------------------------------
+
+static void CopyExpressionWithSameVar(expr_t* expr, const int var_id,
+                                      expr_t** new_expr, variable_t** new_vars, error_t* error)
+{
+    assert(expr);
+    assert(new_expr);
+    assert(new_vars);
+    assert(error);
+
+    if (expr->vars[var_id].isfree == true)
+    {
+        error->code = (int) ExpressionErrors::NO_DIFF_VARIABLE;
+        error->data = "unknown id";         // TODO нормально сделать
+        return;
+    }
+
+    expr_t* d_expr = MakeExpression(error);
+    if (error->code != (int) ExpressionErrors::NONE)
+        return;
+
+    variable_t* vars = AllocVariablesArray(error);
+    if (error->code != (int) ExpressionErrors::NONE)
+        return;
+
+    void* success = memcpy(vars, expr->vars, MAX_VARIABLES_AMT * sizeof(variable_t));
+    if (!success)
+    {
+        error->code = (int) ExpressionErrors::ALLOCATE_MEMORY;
+        error->data = "VARIABLES ARRAY";
+        return;
+    }
+
+    *new_expr = d_expr;
+    *new_vars = vars;
+
+    SimplifyExpression(expr, error);
+}
+
+//------------------------------------------------------------------
+
+expr_t* DifferentiateExpression(expr_t* expr, const char* var, error_t* error)
+{
+    assert(var);
+    assert(expr);
+    assert(error);
+
+    int         var_id  = NO_VARIABLE;
+    expr_t*     d_expr  = nullptr;
+    variable_t* vars    = nullptr;
+    CopyExpressionWithSameVar(expr, var, &var_id, &d_expr, &vars, error);
+    if (error->code != (int) ExpressionErrors::NONE)
+        return nullptr;
 
     Node* root = Differentiate(expr->root, var_id, error);
     if (error->code != (int) ExpressionErrors::NONE)
@@ -659,35 +728,16 @@ expr_t* DifferentiateExpression(expr_t* expr, const char* var, error_t* error)
 
 //------------------------------------------------------------------
 
-expr_t* DifferentiateExpression(expr_t* expr, const int var_id, error_t* error)
+static expr_t* DifferentiateExpression(expr_t* expr, const int var_id, error_t* error)
 {
     assert(expr);
     assert(error);
 
-    if (expr->vars[var_id].isfree == true)
-    {
-        error->code = (int) ExpressionErrors::NO_DIFF_VARIABLE;
-        error->data = "unknown id";         // TODO нормально сделать
-        return nullptr;
-    }
-
-    expr_t* d_expr = MakeExpression(error);
+    expr_t*     d_expr  = nullptr;
+    variable_t* vars    = nullptr;
+    CopyExpressionWithSameVar(expr, var_id, &d_expr, &vars, error);
     if (error->code != (int) ExpressionErrors::NONE)
         return nullptr;
-
-    variable_t* vars = AllocVariablesArray(error);
-    if (error->code != (int) ExpressionErrors::NONE)
-        return nullptr;
-
-    void* success = memcpy(vars, expr->vars, MAX_VARIABLES_AMT * sizeof(variable_t));
-    if (!success)
-    {
-        error->code = (int) ExpressionErrors::ALLOCATE_MEMORY;
-        error->data = "VARIABLES ARRAY";
-        return nullptr;
-    }
-
-    SimplifyExpression(expr, error);
 
     Node* root = Differentiate(expr->root, var_id, error);
     if (error->code != (int) ExpressionErrors::NONE)
@@ -729,31 +779,12 @@ expr_t* TaylorSeries(expr_t* expr, const int n, const char* var, error_t* error)
     assert(expr);
     assert(error);
 
-    int var_id = FindVariableAmongSaved(expr->vars, var);
-    if (var_id == NO_VARIABLE)
-    {
-        error->code = (int) ExpressionErrors::NO_DIFF_VARIABLE;
-        error->data = var;
-        return nullptr;
-    }
-
-    expr_t* new_expr = MakeExpression(error);
+    int         var_id    = NO_VARIABLE;
+    expr_t*     new_expr  = nullptr;
+    variable_t* vars      = nullptr;
+    CopyExpressionWithSameVar(expr, var, &var_id, &new_expr, &vars, error);
     if (error->code != (int) ExpressionErrors::NONE)
         return nullptr;
-
-    variable_t* vars = AllocVariablesArray(error);
-    if (error->code != (int) ExpressionErrors::NONE)
-        return nullptr;
-
-    void* success = memcpy(vars, expr->vars, MAX_VARIABLES_AMT * sizeof(variable_t));
-    if (!success)
-    {
-        error->code = (int) ExpressionErrors::ALLOCATE_MEMORY;
-        error->data = "VARIABLES ARRAY";
-        return nullptr;
-    }
-
-    SimplifyExpression(expr, error);
 
     expr_t* initial_expr  = expr;
     double  calc          = CalculateExpression(initial_expr, initial_expr->root, error);
@@ -769,7 +800,8 @@ expr_t* TaylorSeries(expr_t* expr, const int n, const char* var, error_t* error)
         initial_expr = DifferentiateExpression(initial_expr, var_id, error);
         if (error->code != (int) ExpressionErrors::NONE)
             return nullptr;
-        calc         = CalculateExpression(initial_expr, initial_expr->root, error);
+
+        calc = CalculateExpression(initial_expr, initial_expr->root, error);
         if (error->code != (int) ExpressionErrors::NONE)
             return nullptr;
     }
