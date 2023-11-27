@@ -56,6 +56,13 @@ int PrintExpressionError(FILE* fp, const void* err, const char* func, const char
 
 #define DEF_OP(name, ...)      name,
 
+enum class LatexOperationTypes
+{
+    INFIX,
+    PREFIX,
+    POSTFIX
+};
+
 enum class Operators
 {
     #include "operations.h"

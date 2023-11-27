@@ -82,160 +82,6 @@ static Node* Differentiate(Node* node, const int id, error_t* error);
 
 static inline int Factorial(const int n);
 
-// ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-
-static inline Node* DifferentiateADD(Node* node, const int id, error_t* error)
-{
-    assert(node);
-
-    return _ADD(d(node->left), d(node->right));
-}
-
-// ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-
-static inline Node* DifferentiateSUB(Node* node, const int id, error_t* error)
-{
-    assert(node);
-
-    return _SUB(d(node->left), d(node->right));
-}
-
-// ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-
-static inline Node* DifferentiateMUL(Node* node, const int id, error_t* error)
-{
-    assert(node);
-
-    return _ADD(_MUL(d(node->left), CPY(node->right)), _MUL(CPY(node->left), d(node->right)));;
-}
-
-// ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-
-static inline Node* DifferentiateDIV(Node* node, const int id, error_t* error)
-{
-    assert(node);
-
-    return _DIV(_SUB(_MUL(d(node->left), CPY(node->right)), _MUL(CPY(node->left), d(node->right))),
-                _DEG(CPY(node->right), NUM(2)));
-}
-
-// ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-
-static inline Node* DifferentiateDEG(Node* node, const int id, error_t* error)
-{
-    assert(node);
-
-    bool has_var_in_base = FindVarInTree(node->left, id);
-    bool has_var_in_deg  = FindVarInTree(node->right, id);
-
-    if (has_var_in_base && has_var_in_deg)
-    {
-        return _MUL(_ADD(_MUL(d(node->right), _LN(CPY(node->left))),
-                         _MUL(CPY(node->right), _DIV(d(node->left), CPY(node->left)))),
-                    CPY(node));
-    }
-    else if (has_var_in_base)
-    {
-        return _MUL(d(node->left), _MUL(CPY(node->right), _DEG(node->left, _SUB(CPY(node->right), NUM(1)))));
-    }
-    else if (has_var_in_deg)
-    {
-        return _MUL(_LN(node->left), CPY(node->right));
-    }
-    else
-        return NUM(0);
-}
-
-// ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-
-static inline Node* DifferentiateEXP(Node* node, const int id, error_t* error)
-{
-    assert(node);
-
-    return _MUL(d(node->right), CPY(node));
-}
-
-// ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-
-static inline Node* DifferentiateLN(Node* node, const int id, error_t* error)
-{
-    assert(node);
-
-    return _MUL(d(node->right), _DIV(NUM(1), CPY(node->right)));
-}
-
-// ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-
-static inline Node* DifferentiateSIN(Node* node, const int id, error_t* error)
-{
-    assert(node);
-
-    return _MUL(d(node->right), _COS(CPY(node->right)));
-}
-
-// ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-
-static inline Node* DifferentiateCOS(Node* node, const int id, error_t* error)
-{
-    assert(node);
-
-    return _MUL(NUM(-1), _MUL(d(node->right), _SIN(CPY(node->right))));
-}
-
-// ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-
-static inline Node* DifferentiateTAN(Node* node, const int id, error_t* error)
-{
-    assert(node);
-
-    return _MUL(d(node->right), _DIV(NUM(1), _DEG(_COS(node->right), NUM(2))));
-}
-
-// ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-
-static inline Node* DifferentiateCOT(Node* node, const int id, error_t* error)
-{
-    assert(node);
-
-    return _MUL(NUM(-1), _MUL(d(node->right), _DIV(NUM(1), _DEG(_SIN(node->right), NUM(2)))));
-}
-
-// ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-
-static inline Node* DifferentiateARCSIN(Node* node, const int id, error_t* error)
-{
-    assert(node);
-
-    return _DEG(_SUB(NUM(1), _DEG(CPY(node->right), NUM(2))), NUM(-0.5));
-}
-
-// ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-
-static inline Node* DifferentiateARCCOS(Node* node, const int id, error_t* error)
-{
-    assert(node);
-
-    return _MUL(NUM(-1), _DEG(_SUB(NUM(1), _DEG(CPY(node->right), NUM(2))), NUM(-0.5)));
-}
-
-// ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-
-static inline Node* DifferentiateARCTAN(Node* node, const int id, error_t* error)
-{
-    assert(node);
-
-    return _DIV(NUM(1), _ADD(NUM(1), _DEG(CPY(node->right), NUM(2))));
-}
-
-// ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
-
-static inline Node* DifferentiateARCCOT(Node* node, const int id, error_t* error)
-{
-    assert(node);
-
-    return _DIV(NUM(-1), _ADD(NUM(1), _DEG(CPY(node->right), NUM(2))));
-}
-
 //------------------------------------------------------------------
 
 static bool AreEqual(const double a, const double b)
@@ -713,9 +559,13 @@ void SimplifyExpression(expr_t* expr, error_t* error)
 
 //------------------------------------------------------------------
 
-#define DEF_OP(name, symb, ...)                             \
-        case (Operators::name):                             \
-            return Differentiate##name(node, id, error);    \
+#define DEF_OP(name, symb, priority, arg_amt, action, type, tex_symb, need_brackets, figure_brackets, diff, ...)    \
+        case (Operators::name):                                                                                     \
+        {                                                                                                           \
+            assert(node);                                                                                           \
+            diff;                                                                                                   \
+            break;                                                                                                  \
+        }                                                                                                           \
 
 
 static Node* Differentiate(Node* node, const int id, error_t* error)

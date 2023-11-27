@@ -39,6 +39,15 @@ static void        PrintNodeData(FILE* fp, const expr_t* expr, const Node* node)
 static void        PrintNodeDataType(FILE* fp, const NodeType type);
 
 static bool        CheckBracketsNeededInEquation(const Node* node);
+static void        PutOpeningBracket(FILE* fp, bool need_bracket, bool figure_bracket);
+static void        PutClosingBracket(FILE* fp, bool need_bracket, bool figure_bracket);
+
+static void        LatexPrintTwoArgumentsOperation(FILE* fp, const expr_t* expr, const Node* node,
+                                                   const char* opt, LatexOperationTypes type,
+                                                   bool need_brackets, bool figure_brackets);
+static void        LatexPrintOneArgumentOperation(FILE* fp, const expr_t* expr, const Node* node,
+                                                  const char* opt, LatexOperationTypes type,
+                                                  bool need_brackets, bool figure_brackets);
 
 // ======================================================================
 // GRAPH BUILDING
@@ -413,10 +422,15 @@ static void NodesInfixPrint(FILE* fp, const expr_t* expr, const Node* node)
 
 //-----------------------------------------------------------------------------------------------------
 
-#define DEF_OP(name, symb, priority, arg_amt, action, tex, ...)     \
-    case (Operators::name):                                         \
-        tex;                                                        \
-        break;                                                      \
+#define DEF_OP(name, symb, priority, arg_amt, action, type, tex_symb, need_brackets, figure_brackets, ...)      \
+    case (Operators::name):                                                                                     \
+    {                                                                                                           \
+        if (arg_amt == 2)                                                                                       \
+            LatexPrintTwoArgumentsOperation(fp, expr, node, tex_symb, type, need_brackets, figure_brackets);    \
+        if (arg_amt == 1)                                                                                       \
+            LatexPrintOneArgumentOperation(fp, expr, node, tex_symb, type, need_brackets, figure_brackets);     \
+        break;                                                                                                  \
+    }
 
 static void NodesInfixPrintLatex(FILE* fp, const expr_t* expr, const Node* node)
 {
@@ -442,6 +456,91 @@ static void NodesInfixPrintLatex(FILE* fp, const expr_t* expr, const Node* node)
 }
 
 #undef DEF_OP
+
+//-----------------------------------------------------------------------------------------------------
+
+static void LatexPrintTwoArgumentsOperation(FILE* fp, const expr_t* expr, const Node* node,
+                                            const char* opt, LatexOperationTypes type,
+                                            bool need_brackets, bool figure_brackets)
+{
+    assert(opt);
+    assert(expr);
+    assert(node);
+
+    bool need_brackets_on_the_left  = (need_brackets || CheckBracketsNeededInEquation(node->left));
+    bool need_brackets_on_the_right = (need_brackets || CheckBracketsNeededInEquation(node->right));
+
+    if (type == LatexOperationTypes::PREFIX)
+        fprintf(fp, "%s", opt);
+
+    PutOpeningBracket(fp, need_brackets_on_the_left, figure_brackets);
+    NodesInfixPrintLatex(fp, expr, node->left);
+    PutClosingBracket(fp, need_brackets_on_the_left, figure_brackets);
+
+    if (type == LatexOperationTypes::INFIX)
+        fprintf(fp, " %s ", opt);
+
+    PutOpeningBracket(fp, need_brackets_on_the_right, figure_brackets);
+    NodesInfixPrintLatex(fp, expr, node->right);
+    PutClosingBracket(fp, need_brackets_on_the_right, figure_brackets);
+
+    if (type == LatexOperationTypes::POSTFIX)
+        fprintf(fp, "%s", opt);
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+static void LatexPrintOneArgumentOperation(FILE* fp, const expr_t* expr, const Node* node,
+                                            const char* opt, LatexOperationTypes type,
+                                            bool need_brackets, bool figure_brackets)
+{
+    assert(opt);
+    assert(expr);
+    assert(node);
+
+    bool need_brackets_on_the_left  = (need_brackets || CheckBracketsNeededInEquation(node->left));
+    bool need_brackets_on_the_right = (need_brackets || CheckBracketsNeededInEquation(node->right));
+
+    if (type == LatexOperationTypes::PREFIX)
+    {
+        fprintf(fp, "%s", opt);
+        PutOpeningBracket(fp, need_brackets_on_the_right, figure_brackets);
+        NodesInfixPrintLatex(fp, expr, node->right);
+        PutClosingBracket(fp, need_brackets_on_the_right, figure_brackets);
+    }
+
+    if (type == LatexOperationTypes::POSTFIX)
+    {
+        PutOpeningBracket(fp, need_brackets_on_the_left, figure_brackets);
+        NodesInfixPrintLatex(fp, expr, node->left);
+        PutClosingBracket(fp, need_brackets_on_the_left, figure_brackets);
+        fprintf(fp, "%s", opt);
+    }
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+static void PutOpeningBracket(FILE* fp, bool need_bracket, bool figure_bracket)
+{
+    if (!need_bracket)  return;
+
+    if (figure_bracket)
+        fputc('{', fp);
+    else
+        fputc('(', fp);
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+static void PutClosingBracket(FILE* fp, bool need_bracket, bool figure_bracket)
+{
+    if (!need_bracket)  return;
+
+    if (figure_bracket)
+        fputc('}', fp);
+    else
+        fputc(')', fp);
+}
 
 //-----------------------------------------------------------------------------------------------------
 
