@@ -11,4 +11,6 @@ expr_t* DifferentiateExpression(expr_t* expr, const char* var, error_t* error);
 
 expr_t* TaylorSeries(expr_t* expr, const int n, const char* var, error_t* error);
 
+void DrawExprGraphic(const expr_t* expr);
+
 #endif

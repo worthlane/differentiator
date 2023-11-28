@@ -31,7 +31,7 @@ DEF_OP(MUL, "*", 2, 2, {number_1 * number_2}, LatexOperationTypes::INFIX, "\\cdo
 
 //------------------------------------------------------------------
 
-DEF_OP(DEG, "^", 2, 2, {pow(number_1, number_2)}, LatexOperationTypes::INFIX, "^", false, false,
+DEF_OP(DEG, "**", 2, 2, {pow(number_1, number_2)}, LatexOperationTypes::INFIX, "^", false, false,
 {
     bool has_var_in_base = FindVarInTree(node->left, id);
     bool has_var_in_deg  = FindVarInTree(node->right, id);

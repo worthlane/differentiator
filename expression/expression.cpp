@@ -4,7 +4,7 @@
 #include <time.h>
 
 #include "expression.h"
-#include "graphs.h"
+#include "visual.h"
 #include "common/input_and_output.h"
 #include "common/file_read.h"
 #include "common/colorlib.h"
@@ -17,14 +17,14 @@ static ExpressionErrors  VerifyNodes(const Node* node, error_t* error);
 
 static const char* NIL = "nil";
 
-static Node*       ReadExpressionAsTree(expr_t* expr, Storage* info, Node* current_node, error_t* error);
+static Node*       ReadExpressionTree(expr_t* expr, Storage* info, Node* current_node, error_t* error);
 static Node*       NodesPrefixRead(expr_t* expr, Storage* info, Node* current_node, error_t* error);
 static void        ReadNodeData(expr_t* expr, Storage* info, NodeType* type, NodeValue* value,  error_t* error);
 
 static inline void DeleteClosingBracketFromWord(Storage* info, char* read);
 static char        CheckOpeningBracketInInput(Storage* info);
 
-static Node*       ExpressionReadNewNode(expr_t* expr, Storage* info, Node* parent_node, error_t* error);
+static Node*       ExpressionReadNewInfixNode(expr_t* expr, Storage* info, Node* parent_node, error_t* error);
 static Node*       PrefixReadNewNode(expr_t* expr, Storage* info, Node* parent_node, error_t* error);
 static bool        TryReadNumber(Storage* info, NodeType* type, NodeValue* value);
 
@@ -35,7 +35,6 @@ static bool        TryReadNumber(Storage* info, NodeType* type, NodeValue* value
 static void        TextExpressionDump(FILE* fp, const expr_t* expr);
 static void        NodesInfixPrint(FILE* fp, const expr_t* expr, const Node* node);
 static void        NodesInfixPrintLatex(FILE* fp, const expr_t* expr, const Node* node);
-static void        PrintNodeData(FILE* fp, const expr_t* expr, const Node* node);
 static void        PrintNodeDataType(FILE* fp, const NodeType type);
 
 static bool        CheckBracketsNeededInEquation(const Node* node);
@@ -164,7 +163,7 @@ void ConnectNodesWithParents(Node* node)
 
 //-----------------------------------------------------------------------------------------------------
 
-static void PrintNodeData(FILE* fp, const expr_t* expr, const Node* node)
+void PrintNodeData(FILE* fp, const expr_t* expr, const Node* node)
 {
     assert(node);
 
@@ -245,7 +244,7 @@ variable_t* AllocVariablesArray(error_t* error)
 
 ExpressionErrors ExpressionCtor(expr_t* expr, error_t* error)
 {
-    Node* root = MakeNode(INIT_TYPE, ZERO_VALUE, nullptr, nullptr, nullptr);
+    Node* root = MakeNode(PZN_TYPE, ZERO_VALUE, nullptr, nullptr, nullptr);
 
     variable_t* vars = AllocVariablesArray(error);
     RETURN_IF_EXPRESSION_ERROR((ExpressionErrors) error->code);
@@ -599,7 +598,7 @@ void ExpressionInfixRead(Storage* info, expr_t* expr, error_t* error)
     else
     {
         Bufungetc(info);
-        root = ReadExpressionAsTree(expr, info, root, error);
+        root = ReadExpressionTree(expr, info, root, error);
     }
 
     expr->root = root;
@@ -643,7 +642,7 @@ static char CheckOpeningBracketInInput(Storage* info)
 
 //-----------------------------------------------------------------------------------------------------
 
-static Node* ReadExpressionAsTree(expr_t* expr, Storage* info, Node* current_node, error_t* error)
+static Node* ReadExpressionTree(expr_t* expr, Storage* info, Node* current_node, error_t* error)
 {
     assert(error);
     assert(expr);
@@ -655,7 +654,7 @@ static Node* ReadExpressionAsTree(expr_t* expr, Storage* info, Node* current_nod
 
     if (opening_bracket_check == '(')
     {
-        Node* new_node = ExpressionReadNewNode(expr, info, current_node, error);
+        Node* new_node = ExpressionReadNewInfixNode(expr, info, current_node, error);
         if (error->code != (int) ExpressionErrors::NONE)
             return nullptr;
 
@@ -717,18 +716,18 @@ static Node* NodesPrefixRead(expr_t* expr, Storage* info, Node* current_node, er
 
 //-----------------------------------------------------------------------------------------------------
 
-static Node* ExpressionReadNewNode(expr_t* expr, Storage* info, Node* parent_node, error_t* error)
+static Node* ExpressionReadNewInfixNode(expr_t* expr, Storage* info, Node* parent_node, error_t* error)
 {
     assert(expr);
     assert(info);
     assert(error);
 
-    Node* node = MakeNode(INIT_TYPE, ZERO_VALUE, nullptr, nullptr, nullptr);
+    Node* node = MakeNode(PZN_TYPE, ZERO_VALUE, nullptr, nullptr, nullptr);
 
-    NodeType type = INIT_TYPE;
+    NodeType type = PZN_TYPE;
     NodeValue val = ZERO_VALUE;
 
-    Node* left = ReadExpressionAsTree(expr, info, node, error);
+    Node* left = ReadExpressionTree(expr, info, node, error);
     if (error->code != (int) ExpressionErrors::NONE)
         return nullptr;
 
@@ -738,7 +737,7 @@ static Node* ExpressionReadNewNode(expr_t* expr, Storage* info, Node* parent_nod
     if (error->code != (int) ExpressionErrors::NONE)
         return nullptr;
 
-    Node* right = ReadExpressionAsTree(expr, info, node, error);
+    Node* right = ReadExpressionTree(expr, info, node, error);
     if (error->code != (int) ExpressionErrors::NONE)
         return nullptr;
 
@@ -761,9 +760,9 @@ static Node* PrefixReadNewNode(expr_t* expr, Storage* info, Node* parent_node, e
     assert(info);
     assert(error);
 
-    Node* node = MakeNode(INIT_TYPE, ZERO_VALUE, nullptr, nullptr, nullptr);
+    Node* node = MakeNode(PZN_TYPE, ZERO_VALUE, nullptr, nullptr, nullptr);
 
-    NodeType type = INIT_TYPE;
+    NodeType type = PZN_TYPE;
     NodeValue val = ZERO_VALUE;
 
     ReadNodeData(expr, info, &type, &val, error);
@@ -957,7 +956,13 @@ int NodeDump(FILE* fp, const void* dumping_node, const char* func, const char* f
 
     fprintf(fp, "NODE [%p]<br>\n"
                 "LEFT > [%p]<br>\n"
-                "RIGHT > [%p]<br>\n");
+                "RIGHT > [%p]<br>\n"
+                "TYPE > ", node, node->left, node->right);
+
+    PrintNodeDataType(fp, node->type);
+
+    fprintf(fp, "<br>\n"
+                "VALUE > %g<br>\n", node->value);
 
     LOG_END();
 
@@ -1039,7 +1044,12 @@ static void DrawTreeGraph(const expr_t* expr)
 {
     assert(expr);
 
-    FILE* dotf = fopen(DOT_FILE, "w");
+    FILE* dotf = fopen(TMP_DOT_FILE, "w");
+    if (dotf == nullptr)
+    {
+        PrintLog("CAN NOT DRAW TREE GRAPH<br>\n");
+        return;
+    }
 
     StartGraph(dotf);
     DrawNodes(dotf, expr, expr->root, 1);
@@ -1047,7 +1057,7 @@ static void DrawTreeGraph(const expr_t* expr)
 
     fclose(dotf);
 
-    MakeImgFromDot(DOT_FILE);
+    MakeImgFromDot(TMP_DOT_FILE);
 }
 
 //:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::;::::::::::::::::::::::::::

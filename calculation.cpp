@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "calculation.h"
+#include "expression/visual.h"
 
 // ======================================================================
 // DSL
@@ -87,6 +88,10 @@ static void    CopyExpressionWithSameVar(expr_t* expr, const char* var, int* id,
                                          expr_t** new_expr, variable_t** new_vars, error_t* error);
 
 static inline int Factorial(const int n);
+
+// ======================================================================
+// DRAW GRAPHICS
+// ======================================================================
 
 //------------------------------------------------------------------
 
@@ -658,7 +663,7 @@ static void CopyExpressionWithSameVar(expr_t* expr, const char* var, int* id,
     SimplifyExpression(expr, error);
 }
 
-//------------------------------------------------------------------
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::
 
 static void CopyExpressionWithSameVar(expr_t* expr, const int var_id,
                                       expr_t** new_expr, variable_t** new_vars, error_t* error)
@@ -726,7 +731,7 @@ expr_t* DifferentiateExpression(expr_t* expr, const char* var, error_t* error)
     return d_expr;
 }
 
-//------------------------------------------------------------------
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
 static expr_t* DifferentiateExpression(expr_t* expr, const int var_id, error_t* error)
 {
@@ -814,4 +819,26 @@ expr_t* TaylorSeries(expr_t* expr, const int n, const char* var, error_t* error)
     SimplifyExpression(new_expr, error);
 
     return new_expr;
+}
+
+//------------------------------------------------------------------
+
+void DrawExprGraphic(const expr_t* expr)
+{
+    assert(expr);
+
+    FILE* gnuf = fopen(TMP_GNU_FILE, "w");
+    if (gnuf == nullptr)
+        PrintLog("CAN NOT DRAW GRAPHIC");
+
+    char* img_name = GenImgName();
+
+    StartGraphic(gnuf, img_name);
+
+
+
+    EndGraphic(gnuf);
+    MakeImgFromGpl(TMP_GNU_FILE, img_name);
+
+    free(img_name);
 }

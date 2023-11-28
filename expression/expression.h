@@ -113,7 +113,7 @@ enum class NodeType
 
     POISON,
 };
-static const NodeType INIT_TYPE  = NodeType::POISON;
+static const NodeType PZN_TYPE  = NodeType::POISON;
 
 union NodeValue
 {
@@ -204,6 +204,8 @@ ExpressionErrors ExpressionVerify(const expr_t* expr, error_t* error);
                                                 if (tree_err_ != ExpressionErrors::NONE)                    \
                                                     return tree_err_;                                       \
                                             } while(0)
+
+void  PrintNodeData(FILE* fp, const expr_t* expr, const Node* node);
 
 #endif
 

@@ -41,10 +41,12 @@ int main(const int argc, const char* argv[])
     /*expr_t* d_expr = DifferentiateExpression(&expr, "x", &error);
     EXIT_IF_EXPRESSION_ERROR(&error);*/
 
-    expr_t* d_expr = TaylorSeries(&expr, 5, "x", &error);
+    expr_t* d_expr = TaylorSeries(&expr, 20, "x", &error);
     EXIT_IF_EXPRESSION_ERROR(&error);
 
     PrintExpressionTreeLatex(stdout, d_expr);
+    FILE* outstream = fopen("text.txt", "w");
+    PrintExpressionTree(outstream, d_expr);
 
     DUMP_EXPRESSION(d_expr);
 
