@@ -53,6 +53,7 @@ int     ExpressionDump(FILE* fp, const void* nodes, const char* func, const char
 // ======================================================================
 
 void DrawExprGraphic(const expr_t* expr);
+void DrawTwoExprGraphics(const expr_t* expr_1, const expr_t* expr_2);
 
 
 

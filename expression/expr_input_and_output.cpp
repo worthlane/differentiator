@@ -10,15 +10,15 @@
 
 static const char* NIL = "nil";
 
-static Node*       ReadExpressionTree(expr_t* expr, Storage* info, Node* current_node, error_t* error);
+static Node*       NodesInfixRead(expr_t* expr, Storage* info, Node* current_node, error_t* error);
 static Node*       NodesPrefixRead(expr_t* expr, Storage* info, Node* current_node, error_t* error);
 static void        ReadNodeData(expr_t* expr, Storage* info, NodeType* type, NodeValue* value,  error_t* error);
 
 static inline void DeleteClosingBracketFromWord(Storage* info, char* read);
 static char        CheckOpeningBracketInInput(Storage* info);
 
-static Node*       ExpressionReadNewInfixNode(expr_t* expr, Storage* info, Node* parent_node, error_t* error);
-static Node*       PrefixReadNewNode(expr_t* expr, Storage* info, Node* parent_node, error_t* error);
+static Node*       ReadNewInfixNode(expr_t* expr, Storage* info, Node* parent_node, error_t* error);
+static Node*       ReadNewPrefixNode(expr_t* expr, Storage* info, Node* parent_node, error_t* error);
 static bool        TryReadNumber(Storage* info, NodeType* type, NodeValue* value);
 
 // ======================================================================
@@ -27,7 +27,8 @@ static bool        TryReadNumber(Storage* info, NodeType* type, NodeValue* value
 
 static void        TextExpressionDump(FILE* fp, const expr_t* expr);
 static void        NodesInfixPrint(FILE* fp, const expr_t* expr, const Node* node);
-static void        NodesInfixPrintLatex(FILE* fp, const expr_t* expr, const Node* node);
+static void        NodesLatexPrint(FILE* fp, const expr_t* expr, const Node* node);
+static void        NodesGnuplotPrint(FILE* fp, const expr_t* expr, const Node* node);
 static void        PrintNodeDataType(FILE* fp, const NodeType type);
 
 static bool        CheckBracketsNeededInEquation(const Node* node);
@@ -41,13 +42,16 @@ static void        LatexPrintOneArgumentOperation(FILE* fp, const expr_t* expr, 
                                                   const char* opt, LatexOperationTypes type,
                                                   bool need_brackets, bool figure_brackets);
 
+static void        PrintOperationForPlot(FILE* fp, const expr_t* expr, const Node* node, const char* opt);
+
 // ======================================================================
 // GRAPH BUILDING
 // ======================================================================
 
-static void DrawTreeGraph(const expr_t* expr);
+static void        DrawTreeGraph(const expr_t* expr);
 
 static inline void DrawNodes(FILE* dotf, const expr_t* expr, const Node* node, const int rank);
+static inline void FillNodeColor(FILE* fp, const Node* node);
 
 // ======================================================================
 // EXPRESSION OPERATORS
@@ -138,14 +142,14 @@ void PrintExpressionTreeLatex(FILE* fp, const expr_t* expr)
 {
     assert(expr);
     PrintPrankPhrase(fp);
-    fprintf(fp, "$");
-    NodesInfixPrintLatex(fp, expr, expr->root);
+    fprintf(fp, "\n$");
+    NodesLatexPrint(fp, expr, expr->root);
     fprintf(fp, "$\n");
 }
 
 //-----------------------------------------------------------------------------------------------------
 
-static void NodesInfixPrint(FILE* fp, const expr_t* expr, const Node* node)
+void NodesInfixPrint(FILE* fp, const expr_t* expr, const Node* node)
 {
     if (!node) { return; }
 
@@ -172,7 +176,61 @@ static void NodesInfixPrint(FILE* fp, const expr_t* expr, const Node* node)
 
 //-----------------------------------------------------------------------------------------------------
 
-#define DEF_OP(name, symb, priority, arg_amt, action, type, tex_symb, need_brackets, figure_brackets, ...)      \
+#define DEF_OP(name, symb, priority, arg_amt, action, gnu_symb, type, tex_symb, need_brackets, figure_brackets, ...)      \
+    case (Operators::name):                                                                                     \
+    {                                                                                                           \
+            PrintOperationForPlot(fp, expr, node, gnu_symb);                                     \
+        break;                                                                                                  \
+    }
+
+static void NodesGnuplotPrint(FILE* fp, const expr_t* expr, const Node* node)
+{
+    if (!node) { return; }
+
+    if (node->left == nullptr && node->right == nullptr)
+    {
+        PrintNodeData(fp, expr, node);
+        return;
+    }
+
+    if (node->type == NodeType::OPERATOR)
+    {
+        switch (node->value.opt)
+        {
+            #include "operations.h"
+
+            default:
+                return;
+        }
+    }
+
+}
+
+#undef DEF_OP
+
+//-----------------------------------------------------------------------------------------------------
+
+static void PrintOperationForPlot(FILE* fp, const expr_t* expr, const Node* node, const char* opt)
+{
+    assert(opt);
+    assert(expr);
+    assert(node);
+
+    if (node->left) fputc('(', fp);
+    NodesGnuplotPrint(fp, expr, node->left);
+    if (node->left) fputc(')', fp);
+
+    fprintf(fp, " %s ", opt);
+
+    if (node->right) fputc('(', fp);
+    NodesGnuplotPrint(fp, expr, node->right);
+    if (node->right) fputc(')', fp);
+
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+#define DEF_OP(name, symb, priority, arg_amt, action, gnu_symb, type, tex_symb, need_brackets, figure_brackets, ...)      \
     case (Operators::name):                                                                                     \
     {                                                                                                           \
         if (arg_amt == 2)                                                                                       \
@@ -182,7 +240,7 @@ static void NodesInfixPrint(FILE* fp, const expr_t* expr, const Node* node)
         break;                                                                                                  \
     }
 
-static void NodesInfixPrintLatex(FILE* fp, const expr_t* expr, const Node* node)
+static void NodesLatexPrint(FILE* fp, const expr_t* expr, const Node* node)
 {
     if (!node) { return; }
 
@@ -224,14 +282,14 @@ static void LatexPrintTwoArgumentsOperation(FILE* fp, const expr_t* expr, const 
         fprintf(fp, "%s", opt);
 
     PutOpeningBracket(fp, need_brackets_on_the_left, figure_brackets);
-    NodesInfixPrintLatex(fp, expr, node->left);
+    NodesLatexPrint(fp, expr, node->left);
     PutClosingBracket(fp, need_brackets_on_the_left, figure_brackets);
 
     if (type == LatexOperationTypes::INFIX)
         fprintf(fp, " %s ", opt);
 
     PutOpeningBracket(fp, need_brackets_on_the_right, figure_brackets);
-    NodesInfixPrintLatex(fp, expr, node->right);
+    NodesLatexPrint(fp, expr, node->right);
     PutClosingBracket(fp, need_brackets_on_the_right, figure_brackets);
 
     if (type == LatexOperationTypes::POSTFIX)
@@ -255,14 +313,14 @@ static void LatexPrintOneArgumentOperation(FILE* fp, const expr_t* expr, const N
     {
         fprintf(fp, "%s", opt);
         PutOpeningBracket(fp, need_brackets_on_the_right, figure_brackets);
-        NodesInfixPrintLatex(fp, expr, node->right);
+        NodesLatexPrint(fp, expr, node->right);
         PutClosingBracket(fp, need_brackets_on_the_right, figure_brackets);
     }
 
     if (type == LatexOperationTypes::POSTFIX)
     {
         PutOpeningBracket(fp, need_brackets_on_the_left, figure_brackets);
-        NodesInfixPrintLatex(fp, expr, node->left);
+        NodesLatexPrint(fp, expr, node->left);
         PutClosingBracket(fp, need_brackets_on_the_left, figure_brackets);
         fprintf(fp, "%s", opt);
     }
@@ -299,12 +357,17 @@ static bool CheckBracketsNeededInEquation(const Node* node)
     if (!node) return false;
 
     if (node->type != NodeType::OPERATOR)
-        return false;
+    {
+        if (node->parent->left == nullptr)
+            return true;
+        else
+            return false;
+    }
 
     int kid_priority    = GetOperationPriority(node->value.opt);
     int parent_priority = GetOperationPriority(node->parent->value.opt);
 
-    if (kid_priority <= parent_priority)
+    if (kid_priority < parent_priority)
         return true;
 
     return false;
@@ -363,7 +426,7 @@ void ExpressionInfixRead(Storage* info, expr_t* expr, error_t* error)
     else
     {
         Bufungetc(info);
-        root = ReadExpressionTree(expr, info, root, error);
+        root = NodesInfixRead(expr, info, root, error);
     }
 
     expr->root = root;
@@ -407,7 +470,7 @@ static char CheckOpeningBracketInInput(Storage* info)
 
 //-----------------------------------------------------------------------------------------------------
 
-static Node* ReadExpressionTree(expr_t* expr, Storage* info, Node* current_node, error_t* error)
+static Node* NodesInfixRead(expr_t* expr, Storage* info, Node* current_node, error_t* error)
 {
     assert(error);
     assert(expr);
@@ -419,7 +482,7 @@ static Node* ReadExpressionTree(expr_t* expr, Storage* info, Node* current_node,
 
     if (opening_bracket_check == '(')
     {
-        Node* new_node = ExpressionReadNewInfixNode(expr, info, current_node, error);
+        Node* new_node = ReadNewInfixNode(expr, info, current_node, error);
         if (error->code != (int) ExpressionErrors::NONE)
             return nullptr;
 
@@ -452,7 +515,7 @@ static Node* NodesPrefixRead(expr_t* expr, Storage* info, Node* current_node, er
 
     if (opening_bracket_check == '(')
     {
-        Node* new_node = PrefixReadNewNode(expr, info, current_node, error);
+        Node* new_node = ReadNewPrefixNode(expr, info, current_node, error);
 
         char closing_bracket_check = Bufgetc(info);
         if (closing_bracket_check != ')')
@@ -481,7 +544,7 @@ static Node* NodesPrefixRead(expr_t* expr, Storage* info, Node* current_node, er
 
 //-----------------------------------------------------------------------------------------------------
 
-static Node* ExpressionReadNewInfixNode(expr_t* expr, Storage* info, Node* parent_node, error_t* error)
+static Node* ReadNewInfixNode(expr_t* expr, Storage* info, Node* parent_node, error_t* error)
 {
     assert(expr);
     assert(info);
@@ -492,7 +555,7 @@ static Node* ExpressionReadNewInfixNode(expr_t* expr, Storage* info, Node* paren
     NodeType type = PZN_TYPE;
     NodeValue val = ZERO_VALUE;
 
-    Node* left = ReadExpressionTree(expr, info, node, error);
+    Node* left = NodesInfixRead(expr, info, node, error);
     if (error->code != (int) ExpressionErrors::NONE)
         return nullptr;
 
@@ -502,7 +565,7 @@ static Node* ExpressionReadNewInfixNode(expr_t* expr, Storage* info, Node* paren
     if (error->code != (int) ExpressionErrors::NONE)
         return nullptr;
 
-    Node* right = ReadExpressionTree(expr, info, node, error);
+    Node* right = NodesInfixRead(expr, info, node, error);
     if (error->code != (int) ExpressionErrors::NONE)
         return nullptr;
 
@@ -519,7 +582,7 @@ static Node* ExpressionReadNewInfixNode(expr_t* expr, Storage* info, Node* paren
 
 //-----------------------------------------------------------------------------------------------------
 
-static Node* PrefixReadNewNode(expr_t* expr, Storage* info, Node* parent_node, error_t* error)
+static Node* ReadNewPrefixNode(expr_t* expr, Storage* info, Node* parent_node, error_t* error)
 {
     assert(expr);
     assert(info);
@@ -713,8 +776,12 @@ static inline void DrawNodes(FILE* dotf, const expr_t* expr, const Node* node, c
 {
     if (!node) return;
 
-    fprintf(dotf, "%lld [shape=Mrecord, style=filled, fillcolor=\"lightblue\", color = darkblue, rank = %d, label=\" "
-                  "{ node: %p | parent: %p | { type: " , node, rank, node, node->parent);
+    fprintf(dotf, "%lld [shape=Mrecord, style=filled, " , node);
+
+    FillNodeColor(dotf, node);
+
+    fprintf(dotf, " rank = %d, label=\" "
+                  "{ node: %p | parent: %p | { type: " ,rank, node, node->parent);
 
     PrintNodeDataType(dotf, node->type);
 
@@ -737,6 +804,30 @@ static inline void DrawNodes(FILE* dotf, const expr_t* expr, const Node* node, c
         fprintf(dotf, "%lld->%lld [color = black, fontcolor = black]\n", node, node->right);
 }
 
+//:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::;::::::::::::::::::::::::::
+
+static inline void FillNodeColor(FILE* fp, const Node* node)
+{
+    assert(node);
+
+    switch (node->type)
+    {
+        case (NodeType::NUMBER):
+            fprintf(fp, "fillcolor = \"lightblue\", color = \"darkblue\",");
+            break;
+        case (NodeType::VARIABLE):
+            fprintf(fp, "fillcolor = \"lightgreen\", color = \"darkgreen\",");
+            break;
+        case (NodeType::OPERATOR):
+            fprintf(fp, "fillcolor = \"yellow\", color = \"goldenrod\",");
+            break;
+        case (NodeType::POISON):
+        // break through
+        default:
+            fprintf(fp, "fillcolor = \"lightgray\", color = \"darkgray\",");
+    }
+}
+
 //------------------------------------------------------------------
 
 void DrawExprGraphic(const expr_t* expr)
@@ -751,7 +842,43 @@ void DrawExprGraphic(const expr_t* expr)
 
     StartGraphic(gnuf, img_name);
 
-    
+    fprintf(gnuf, "plot ");
+    NodesGnuplotPrint(gnuf, expr, expr->root);
+    fprintf(gnuf, " title \"");
+    NodesInfixPrint(gnuf, expr, expr->root);
+    fprintf(gnuf, "\" lc rgb \"red\", ");
+
+    EndGraphic(gnuf);
+    MakeImgFromGpl(TMP_GNU_FILE, img_name);
+
+    free(img_name);
+}
+
+//------------------------------------------------------------------
+
+void DrawTwoExprGraphics(const expr_t* expr_1, const expr_t* expr_2)
+{
+    assert(expr_1);
+    assert(expr_2);
+
+    FILE* gnuf = fopen(TMP_GNU_FILE, "w");
+    if (gnuf == nullptr)
+        PrintLog("CAN NOT DRAW GRAPHIC");
+
+    char* img_name = GenImgName();
+
+    StartGraphic(gnuf, img_name);
+
+    fprintf(gnuf, "plot ");
+    NodesGnuplotPrint(gnuf, expr_1, expr_1->root);
+    fprintf(gnuf, " title \"");
+    NodesInfixPrint(gnuf, expr_1, expr_1->root);
+    fprintf(gnuf, "\" lc rgb \"red\", ");
+
+    NodesGnuplotPrint(gnuf, expr_2, expr_2->root);
+    fprintf(gnuf, " title \"");
+    NodesInfixPrint(gnuf, expr_2, expr_2->root);
+    fprintf(gnuf, "\" lc rgb \"blue\"\n");
 
     EndGraphic(gnuf);
     MakeImgFromGpl(TMP_GNU_FILE, img_name);

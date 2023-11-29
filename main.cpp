@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <time.h>
 
 #include "common/logs.h"
 #include "common/errors.h"
@@ -19,6 +20,8 @@ int main(const int argc, const char* argv[])
     const char* data_file = GetInputFileName(argc, argv, &error);
     EXIT_IF_ERROR(&error);
 
+    FILE* outstream = fopen("text.txt", "w");
+
     FILE* fp = OpenInputFile(data_file, &error);
     EXIT_IF_ERROR(&error);
 
@@ -32,22 +35,20 @@ int main(const int argc, const char* argv[])
 
     printf("%lf\n", CalculateExpression(&expr, expr.root, &error));
 
-    PrintExpressionTreeLatex(stdout, &expr);
-
     DUMP_EXPRESSION(&expr);
 
-    SimplifyExpression(&expr, &error);
+    SimplifyExpression(&expr, &error, outstream);
     PrintExpressionTreeLatex(stdout, &expr);
 
-    /*expr_t* d_expr = DifferentiateExpression(&expr, "x", &error);
+    /*expr_t* d_expr = DifferentiateExpression(&expr, "x", &error, outstream);
     EXIT_IF_EXPRESSION_ERROR(&error);*/
 
-    expr_t* d_expr = TaylorSeries(&expr, 20, "x", &error);
+    expr_t* d_expr = TaylorSeries(&expr, 3, "x", 0, &error, outstream);
     EXIT_IF_EXPRESSION_ERROR(&error);
 
-    PrintExpressionTreeLatex(stdout, d_expr);
-    FILE* outstream = fopen("text.txt", "w");
-    PrintExpressionTree(outstream, d_expr);
+    expr_t* difference = SubExpressions(&expr, d_expr, &error);
+
+    DrawExprGraphic(difference);
 
     DUMP_EXPRESSION(d_expr);
 

@@ -80,14 +80,12 @@ void MakeImgFromGpl(const char* gpl_file, const char* img_name)
     assert(gpl_file);
     assert(img_name);
 
-    system("gnuplot");
-
     char gnu_command[MAX_CMD_LEN] = "";
-    snprintf(gnu_command, MAX_CMD_LEN, "load '%s'", gpl_file);
+    snprintf(gnu_command, MAX_CMD_LEN, "gnuplot '%s'", gpl_file);
     system(gnu_command);
+    system("gnuplot tmp.gpl");
 
     PrintLog("<img src=\"%s\"><br>", img_name);
 
-    system("exit");
 }
 

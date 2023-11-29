@@ -139,8 +139,6 @@ void PrintPrankPhrase(FILE* fp)
                                     "Нет такого?",
                                     "Согл?"};
 
-    srand(time(NULL));
-
     int nmb = rand() % 5;
 
     fprintf(fp, "%s ", PHRASES[nmb]);
