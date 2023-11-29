@@ -821,24 +821,4 @@ expr_t* TaylorSeries(expr_t* expr, const int n, const char* var, error_t* error)
     return new_expr;
 }
 
-//------------------------------------------------------------------
 
-void DrawExprGraphic(const expr_t* expr)
-{
-    assert(expr);
-
-    FILE* gnuf = fopen(TMP_GNU_FILE, "w");
-    if (gnuf == nullptr)
-        PrintLog("CAN NOT DRAW GRAPHIC");
-
-    char* img_name = GenImgName();
-
-    StartGraphic(gnuf, img_name);
-
-
-
-    EndGraphic(gnuf);
-    MakeImgFromGpl(TMP_GNU_FILE, img_name);
-
-    free(img_name);
-}

@@ -56,13 +56,6 @@ int PrintExpressionError(FILE* fp, const void* err, const char* func, const char
 
 #define DEF_OP(name, ...)      name,
 
-enum class LatexOperationTypes
-{
-    INFIX,
-    PREFIX,
-    POSTFIX
-};
-
 enum class Operators
 {
     #include "operations.h"
@@ -99,6 +92,7 @@ static const int    NO_VARIABLE       = -1;
 variable_t* AllocVariablesArray(error_t* error);
 void        DestructVariablesArray(variable_t* variables);
 
+int         SaveVariable(variable_t* vars, const char* new_var);
 int         FindVariableAmongSaved(variable_t* vars, const char* new_var);
 
 // ======================================================================
@@ -138,15 +132,6 @@ Node* MakeNode(const NodeType type, const NodeValue value,
                Node* left, Node* right, Node* parent);
 void  NodeDtor(Node* node);
 void  DestructNodes(Node* root);
-int   NodeDump(FILE* fp, const void* dumping_node, const char* func, const char* file, const int line);
-
-#ifdef DUMP_NODE
-#undef DUMP_NODE
-#endif
-#define DUMP_NODE(node)     do                                                              \
-                            {                                                               \
-                                LogDump(NodeDump, (node), __func__, __FILE__, __LINE__);    \
-                            } while(0)
 
 ExpressionErrors NodeVerify(const Node* node, error_t* error);
 
@@ -161,8 +146,6 @@ ExpressionErrors NodeVerify(const Node* node, error_t* error);
                                     } while(0)
 
 void ConnectNodesWithParents(Node* node);
-
-bool FindVarInTree(Node* node, const int id);
 
 // ======================================================================
 // EXPRESSION STRUCT
@@ -179,19 +162,6 @@ typedef struct Expression expr_t;
 ExpressionErrors    ExpressionCtor(expr_t* expr, error_t* error);
 expr_t*             MakeExpression(error_t* error);
 void                ExpressionDtor(expr_t* expr);
-void                PrintExpressionTree(FILE* fp, const expr_t* expr);
-void                PrintExpressionTreeLatex(FILE* fp, const expr_t* expr);
-void                ExpressionInfixRead(Storage* info, expr_t* expr, error_t* error);
-void                ExpressionPrefixRead(Storage* info, expr_t* expr, error_t* error);
-int                 ExpressionDump(FILE* fp, const void* nodes, const char* func, const char* file, const int line);
-
-#ifdef DUMP_EXPRESSION
-#undef DUMP_EXPRESSION
-#endif
-#define DUMP_EXPRESSION(expr)   do                                                                 \
-                                {                                                               \
-                                    LogDump(ExpressionDump, (expr), __func__, __FILE__, __LINE__);    \
-                                } while(0)
 
 ExpressionErrors ExpressionVerify(const expr_t* expr, error_t* error);
 
@@ -205,7 +175,11 @@ ExpressionErrors ExpressionVerify(const expr_t* expr, error_t* error);
                                                     return tree_err_;                                       \
                                             } while(0)
 
-void  PrintNodeData(FILE* fp, const expr_t* expr, const Node* node);
+// ======================================================================
+// OTHERS
+// ======================================================================
+
+bool FindVarInTree(Node* node, const int id);
 
 #endif
 
