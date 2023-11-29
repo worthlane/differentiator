@@ -3,8 +3,7 @@
 
 #include "calculation.h"
 #include "expression/visual.h"
-#include "expression/expr_input_and_output.h";
-
+#include "expression/expr_input_and_output.h"
 
 #ifdef PRINT_EXPR
 #undef PRINT_EXPR
@@ -100,9 +99,9 @@ static void    MakeExpressionWithSameVar(expr_t* expr, const char* var, int* id,
 
 static inline int Factorial(const int n);
 
-// ======================================================================
-// DRAW GRAPHICS
-// ======================================================================
+static void    CalculateLinearParams(expr_t* expr, const int var_id, double* tang, double* b,
+                                     error_t* error, FILE* fp = nullptr);
+
 
 //------------------------------------------------------------------
 
@@ -543,11 +542,14 @@ static void RemoveNeutralDEG(expr_t* expr, Node* node, int* transform_cnt, error
         {
             (*transform_cnt)++;
 
-            node->right->type      = NodeType::NUMBER;
-            node->right->value.val = 1;
-
+            DestructNodes(node->right);
             DestructNodes(node->left);
-            ReconnectNodesKidWithParent(expr, node, node->right);
+
+            node->left      = nullptr;
+            node->right     = nullptr;
+            node->type      = NodeType::NUMBER;
+            node->value.val = 1;
+            
             PRINT_EXPR(fp, expr);
         }
 
@@ -564,17 +566,20 @@ static void RemoveNeutralDEG(expr_t* expr, Node* node, int* transform_cnt, error
             ReconnectNodesKidWithParent(expr, node, node->left);
             PRINT_EXPR(fp, expr);
         }
-        /*else if (AreEqual(node->right->value.val, 0))
+        else if (AreEqual(node->right->value.val, 0))
         {
             (*transform_cnt)++;
 
-            node->left->type      = NodeType::NUMBER;
-            node->left->value.val = 1;
-
             DestructNodes(node->right);
-            ReconnectNodesKidWithParent(expr, node, node->left);
+            DestructNodes(node->left);
+
+            node->left      = nullptr;
+            node->right     = nullptr;
+            node->type      = NodeType::NUMBER;
+            node->value.val = 1;
+
             PRINT_EXPR(fp, expr);
-        }*/
+        }
     }
 }
 
@@ -677,21 +682,17 @@ static void MakeExpressionWithSameVar(expr_t* expr, const char* var, int* id,
     if (error->code != (int) ExpressionErrors::NONE)
         return;
 
-    variable_t* vars = AllocVariablesArray(error);
+    variable_t* d_vars = AllocVariablesArray(error);
     if (error->code != (int) ExpressionErrors::NONE)
         return;
 
-    void* success = memcpy(vars, expr->vars, MAX_VARIABLES_AMT * sizeof(variable_t));
-    if (!success)
-    {
-        error->code = (int) ExpressionErrors::ALLOCATE_MEMORY;
-        error->data = "VARIABLES ARRAY";
+    CopyVariablesArray(expr->vars, d_vars, error);
+    if (error->code != (int) ExpressionErrors::NONE)
         return;
-    }
 
     *id       = var_id;
     *new_expr = d_expr;
-    *new_vars = vars;
+    *new_vars = d_vars;
 
     SimplifyExpression(expr, error);
 }
@@ -717,20 +718,16 @@ static void MakeExpressionWithSameVar(expr_t* expr, const int var_id,
     if (error->code != (int) ExpressionErrors::NONE)
         return;
 
-    variable_t* vars = AllocVariablesArray(error);
+    variable_t* d_vars = AllocVariablesArray(error);
     if (error->code != (int) ExpressionErrors::NONE)
         return;
 
-    void* success = memcpy(vars, expr->vars, MAX_VARIABLES_AMT * sizeof(variable_t));
-    if (!success)
-    {
-        error->code = (int) ExpressionErrors::ALLOCATE_MEMORY;
-        error->data = "VARIABLES ARRAY";
+    CopyVariablesArray(expr->vars, d_vars, error);
+    if (error->code != (int) ExpressionErrors::NONE)
         return;
-    }
 
     *new_expr = d_expr;
-    *new_vars = vars;
+    *new_vars = d_vars;
 
     SimplifyExpression(expr, error);
 }
@@ -828,11 +825,11 @@ expr_t* TaylorSeries(expr_t* expr, const int n, const char* var, const double va
     if (error->code != (int) ExpressionErrors::NONE)
         return nullptr;
 
-    double prev_val = expr->vars[var_id].value;
+    double prev_val          = expr->vars[var_id].value;
     expr->vars[var_id].value = val;
 
-    expr_t* initial_expr  = expr;
-    double  calc          = CalculateExpression(initial_expr, initial_expr->root, error);
+    expr_t* diff_expr     = expr;
+    double  calc          = CalculateExpression(diff_expr, diff_expr->root, error);
     Node*   taylor_series = NUM(0);
 
     for (int i = 0; i <= n; i++)
@@ -842,11 +839,11 @@ expr_t* TaylorSeries(expr_t* expr, const int n, const char* var, const double va
                                   _DEG(_SUB(VAR(var_id), NUM(expr->vars[var_id].value)),
                                        NUM((double) i))));
 
-        initial_expr = DifferentiateExpression(initial_expr, var_id, error, nullptr);
+        diff_expr = DifferentiateExpression(diff_expr, var_id, error, nullptr);
         if (error->code != (int) ExpressionErrors::NONE)
             return nullptr;
 
-        calc = CalculateExpression(initial_expr, initial_expr->root, error);
+        calc = CalculateExpression(diff_expr, diff_expr->root, error);
         if (error->code != (int) ExpressionErrors::NONE)
             return nullptr;
     }
@@ -865,8 +862,6 @@ expr_t* TaylorSeries(expr_t* expr, const int n, const char* var, const double va
 
 //------------------------------------------------------------------
 
-//------------------------------------------------------------------
-
 expr_t* SubExpressions(expr_t* expr_1, expr_t* expr_2, error_t* error, FILE* fp)
 {
     assert(expr_2);
@@ -877,24 +872,20 @@ expr_t* SubExpressions(expr_t* expr_1, expr_t* expr_2, error_t* error, FILE* fp)
     if (error->code != (int) ExpressionErrors::NONE)
         return nullptr;
 
-    variable_t* vars = AllocVariablesArray(error);
+    variable_t* new_vars = AllocVariablesArray(error);
     if (error->code != (int) ExpressionErrors::NONE)
         return nullptr;
 
-    void* success = memcpy(vars, expr_1->vars, MAX_VARIABLES_AMT * sizeof(variable_t));     // TODO нормальное копирование сделать
-    if (!success)
-    {
-        error->code = (int) ExpressionErrors::ALLOCATE_MEMORY;
-        error->data = "VARIABLES ARRAY";
+    CopyVariablesArray(expr_1->vars, new_vars, error);
+    if (error->code != (int) ExpressionErrors::NONE)
         return nullptr;
-    }
 
     Node* root = _SUB(CPY(expr_1->root), CPY(expr_2->root));
 
     ConnectNodesWithParents(root);
 
     new_expr->root = root;
-    new_expr->vars = vars;
+    new_expr->vars = new_vars;
 
     SimplifyExpression(new_expr, error, fp);
 
@@ -903,7 +894,7 @@ expr_t* SubExpressions(expr_t* expr_1, expr_t* expr_2, error_t* error, FILE* fp)
 
 //------------------------------------------------------------------
 
-/*expr_t* GetTangent(expr_t* expr, const int n, const char* var, error_t* error, FILE* fp)
+expr_t* GetTangent(expr_t* expr, const char* var, const double val, error_t* error, FILE* fp)
 {
     assert(var);
     assert(expr);
@@ -916,34 +907,54 @@ expr_t* SubExpressions(expr_t* expr_1, expr_t* expr_2, error_t* error, FILE* fp)
     if (error->code != (int) ExpressionErrors::NONE)
         return nullptr;
 
-    expr_t* initial_expr  = expr;
-    double  calc          = CalculateExpression(initial_expr, initial_expr->root, error);
-    Node*   taylor_series = NUM(0);
+    double prev_val          = expr->vars[var_id].value;
+    expr->vars[var_id].value = val;
 
-    for (int i = 0; i <= n; i++)
-    {
-        taylor_series = _ADD(taylor_series,
-                             _MUL(_DIV(NUM(calc), NUM((double) Factorial(i))),
-                                  _DEG(_SUB(VAR(var_id), NUM(expr->vars[var_id].value)),
-                                       NUM((double) i))));
+    // tangent: func_val = tang * var + b
 
-        initial_expr = DifferentiateExpression(initial_expr, var_id, error, nullptr);
-        if (error->code != (int) ExpressionErrors::NONE)
-            return nullptr;
+    double tang     = POISON;
+    double b        = POISON;
 
-        calc = CalculateExpression(initial_expr, initial_expr->root, error);
-        if (error->code != (int) ExpressionErrors::NONE)
-            return nullptr;
-    }
+    CalculateLinearParams(expr, var_id, &tang, &b, error, fp);
+    if (error->code != (int) ExpressionErrors::NONE)
+        return nullptr;
 
-    ConnectNodesWithParents(taylor_series);
+    Node* root = _ADD(NUM(b), _MUL(VAR(var_id), NUM(tang)));
 
-    new_expr->root = taylor_series;
+    ConnectNodesWithParents(root);
+
+    new_expr->root = root;
     new_expr->vars = vars;
 
     SimplifyExpression(new_expr, error);
 
-    return new_expr;
-}*/
+    expr->vars[var_id].value = prev_val;
 
+    return new_expr;
+}
+
+//------------------------------------------------------------------
+
+static void CalculateLinearParams(expr_t* expr, const int var_id, double* tang, double* b,
+                                  error_t* error, FILE* fp)
+{
+    assert(tang);
+    assert(b);
+
+    expr_t* d_expr   = DifferentiateExpression(expr, var_id, error, fp);
+    if (error->code != (int) ExpressionErrors::NONE) return;
+
+    double  tan      = CalculateExpression(d_expr, d_expr->root, error);
+    if (error->code != (int) ExpressionErrors::NONE) return;
+
+    double  func_val = CalculateExpression(expr, expr->root, error);
+    if (error->code != (int) ExpressionErrors::NONE) return;
+
+    *b    = func_val - (tan * expr->vars[var_id].value);
+    *tang = tan;
+
+    ExpressionDtor(d_expr);
+
+    return;
+}
 

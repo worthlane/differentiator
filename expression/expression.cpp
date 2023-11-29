@@ -17,6 +17,22 @@ static ExpressionErrors  VerifyNodes(const Node* node, error_t* error);
 
 static void InitVariablesArray(variable_t* variables);
 
+//-----------------------------------------------------------------------------------------------------
+
+variable_t* AllocVariablesArray(error_t* error)
+{
+    variable_t* vars = (variable_t*) calloc(MAX_VARIABLES_AMT, sizeof(variable_t));
+    if (vars == nullptr)
+    {
+        error->code = (int) ExpressionErrors::ALLOCATE_MEMORY;
+        error->data = "VARIABLES ARRAY";
+        return nullptr;
+    }
+
+    return vars;
+}
+
+
 //------------------------------------------------------------------
 
 static void InitVariablesArray(variable_t* variables)
@@ -39,9 +55,34 @@ void DestructVariablesArray(variable_t* variables)
 
     for (size_t i = 0; i < MAX_VARIABLES_AMT; i++)
     {
-        free(variables[i].variable_name);
+        if (!variables[i].variable_name)
+            free(variables[i].variable_name);
         variables[i].isfree = true;
         variables[i].value  = 0;
+    }
+}
+
+//------------------------------------------------------------------
+
+void CopyVariablesArray(const variable_t* vars, variable_t* dest, error_t* error)
+{
+    assert(vars);
+    assert(dest);
+    assert(error);
+
+    for (size_t i = 0; i < MAX_VARIABLES_AMT; i++)
+    {
+        char* name = strndup(vars[i].variable_name, MAX_VARIABLE_LEN);
+        if (!name)
+        {
+            error->code = (int) ExpressionErrors::ALLOCATE_MEMORY;
+            error->data = "COPYING VARS";
+            return;
+        }
+
+        dest[i].variable_name = vars[i].variable_name;
+        dest[i].isfree        = vars[i].isfree;
+        dest[i].value         = vars[i].value;
     }
 }
 
@@ -59,6 +100,51 @@ bool FindVarInTree(Node* node, const int id)
     bool var_in_right_subtree = FindVarInTree(node->right, id);
 
     return (var_in_left_subtree || var_in_right_subtree);
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+int FindVariableAmongSaved(variable_t* vars, const char* new_var)
+{
+    assert(new_var);
+
+    int id = NO_VARIABLE;
+
+    for (int i = 0; i < MAX_VARIABLES_AMT; i++)
+    {
+        if (!vars[i].isfree)
+        {
+            if (!strncmp(new_var, vars[i].variable_name, MAX_VARIABLE_LEN))
+            {
+                id = i;
+                return id;
+            }
+        }
+    }
+
+    return id;
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+int SaveVariable(variable_t* vars, const char* new_var)
+{
+    assert(new_var);
+
+    for (int i = 0; i < MAX_VARIABLES_AMT; i++)
+    {
+        if (vars[i].isfree)
+        {
+            char* name = strndup(new_var, MAX_VARIABLE_LEN);
+            if (!name)  return NO_VARIABLE;
+
+            vars[i].variable_name = name;
+            vars[i].isfree        = false;
+            return i;
+        }
+    }
+
+    return NO_VARIABLE;
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -103,21 +189,6 @@ void ConnectNodesWithParents(Node* node)
     if (node->right != nullptr)
         node->right->parent = node;
 
-}
-
-//-----------------------------------------------------------------------------------------------------
-
-variable_t* AllocVariablesArray(error_t* error)
-{
-    variable_t* vars = (variable_t*) calloc(MAX_VARIABLES_AMT, sizeof(variable_t));
-    if (vars == nullptr)
-    {
-        error->code = (int) ExpressionErrors::ALLOCATE_MEMORY;
-        error->data = "VARIABLES ARRAY";
-        return nullptr;
-    }
-
-    return vars;
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -247,51 +318,6 @@ int PrintExpressionError(FILE* fp, const void* err, const char* func, const char
             LOG_END();
             return (int) ExpressionErrors::UNKNOWN;
     }
-}
-
-//-----------------------------------------------------------------------------------------------------
-
-int FindVariableAmongSaved(variable_t* vars, const char* new_var)
-{
-    assert(new_var);
-
-    int id = NO_VARIABLE;
-
-    for (int i = 0; i < MAX_VARIABLES_AMT; i++)
-    {
-        if (!vars[i].isfree)
-        {
-            if (!strncmp(new_var, vars[i].variable_name, MAX_VARIABLE_LEN))
-            {
-                id = i;
-                return id;
-            }
-        }
-    }
-
-    return id;
-}
-
-//-----------------------------------------------------------------------------------------------------
-
-int SaveVariable(variable_t* vars, const char* new_var)
-{
-    assert(new_var);
-
-    int id = NO_VARIABLE;
-
-    for (int i = 0; i < MAX_VARIABLES_AMT; i++)
-    {
-        if (vars[i].isfree)
-        {
-            id = i;
-            vars[i].variable_name = strndup(new_var, MAX_VARIABLE_LEN);
-            vars[i].isfree = false;
-            return id;
-        }
-    }
-
-    return id;
 }
 
 //-----------------------------------------------------------------------------------------------------

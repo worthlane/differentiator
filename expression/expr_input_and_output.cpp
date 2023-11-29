@@ -142,9 +142,9 @@ void PrintExpressionTreeLatex(FILE* fp, const expr_t* expr)
 {
     assert(expr);
     PrintPrankPhrase(fp);
-    fprintf(fp, "\n$");
+    fprintf(fp, "\n\n$");
     NodesLatexPrint(fp, expr, expr->root);
-    fprintf(fp, "$\n");
+    fprintf(fp, "$\n\n");
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -846,7 +846,7 @@ void DrawExprGraphic(const expr_t* expr)
     NodesGnuplotPrint(gnuf, expr, expr->root);
     fprintf(gnuf, " title \"");
     NodesInfixPrint(gnuf, expr, expr->root);
-    fprintf(gnuf, "\" lc rgb \"red\", ");
+    fprintf(gnuf, "\" lc rgb \"red\"\n");
 
     EndGraphic(gnuf);
     MakeImgFromGpl(TMP_GNU_FILE, img_name);

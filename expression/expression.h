@@ -94,6 +94,7 @@ void        DestructVariablesArray(variable_t* variables);
 
 int         SaveVariable(variable_t* vars, const char* new_var);
 int         FindVariableAmongSaved(variable_t* vars, const char* new_var);
+void        CopyVariablesArray(const variable_t* vars, variable_t* dest, error_t* error);
 
 // ======================================================================
 // EXPRESSION TREE NODES

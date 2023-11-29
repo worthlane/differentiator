@@ -20,9 +20,13 @@ int main(const int argc, const char* argv[])
     const char* data_file = GetInputFileName(argc, argv, &error);
     EXIT_IF_ERROR(&error);
 
-    FILE* outstream = fopen("text.txt", "w");
-
     FILE* fp = OpenInputFile(data_file, &error);
+    EXIT_IF_ERROR(&error);
+
+    const char* output_file = GetOutputFileName(argc, argv, &error);
+    EXIT_IF_ERROR(&error);
+
+    FILE* out_stream = OpenInputFile(output_file, &error);
     EXIT_IF_ERROR(&error);
 
     Storage info = {};
@@ -37,20 +41,18 @@ int main(const int argc, const char* argv[])
 
     DUMP_EXPRESSION(&expr);
 
-    SimplifyExpression(&expr, &error, outstream);
-    PrintExpressionTreeLatex(stdout, &expr);
+    SimplifyExpression(&expr, &error, out_stream);
 
-    /*expr_t* d_expr = DifferentiateExpression(&expr, "x", &error, outstream);
-    EXIT_IF_EXPRESSION_ERROR(&error);*/
-
-    expr_t* d_expr = TaylorSeries(&expr, 3, "x", 0, &error, outstream);
+    expr_t* d_expr = TaylorSeries(&expr, 3, "x", 8, &error, out_stream);
     EXIT_IF_EXPRESSION_ERROR(&error);
+
+    PrintExpressionTree(stdout, d_expr);
 
     expr_t* difference = SubExpressions(&expr, d_expr, &error);
 
     DrawExprGraphic(difference);
 
-    DUMP_EXPRESSION(d_expr);
+    DUMP_EXPRESSION(difference);
 
     fclose(fp);
 }

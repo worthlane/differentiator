@@ -15,7 +15,9 @@ char* GetDataFromLine(FILE* fp, error_t* error);
 bool DoesLineHaveOtherSymbols(FILE* fp);
 
 const char* GetInputFileName(const int argc, const char* argv[], error_t* error);
+const char* GetOutputFileName(const int argc, const char* argv[], error_t* error);
 FILE* OpenInputFile(const char* file_name, error_t* error);
+FILE* OpenOutputFile(const char* file_name, error_t* error);
 
 void PrintPrankPhrase(FILE* fp);
 

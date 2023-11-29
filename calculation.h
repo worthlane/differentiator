@@ -13,5 +13,7 @@ expr_t* TaylorSeries(expr_t* expr, const int n, const char* var, const double va
 
 expr_t* SubExpressions(expr_t* expr_1, expr_t* expr_2, error_t* error, FILE* fp = nullptr);
 
+expr_t* GetTangent(expr_t* expr, const char* var, const double val, error_t* error, FILE* fp = nullptr);
+
 
 #endif

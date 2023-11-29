@@ -107,6 +107,24 @@ FILE* OpenInputFile(const char* file_name, error_t* error)
 
 //-----------------------------------------------------------------------------------------------------
 
+FILE* OpenOutputFile(const char* file_name, error_t* error)
+{
+    assert(file_name);
+    assert(error);
+
+    FILE* fp = fopen(file_name, "w");
+    if (!fp)
+    {
+        error->code = (int) ERRORS::OPEN_FILE;
+        error->data = file_name;
+    }
+
+    return fp;
+}
+
+
+//-----------------------------------------------------------------------------------------------------
+
 const char* GetInputFileName(const int argc, const char* argv[], error_t* error)
 {
     assert(error);
@@ -124,6 +142,29 @@ const char* GetInputFileName(const int argc, const char* argv[], error_t* error)
 
     if (file_name != nullptr)
         PrintGreenText(stdout, "INPUT FILE NAME: \"%s\"\n", file_name);
+
+    return file_name;
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+const char* GetOutputFileName(const int argc, const char* argv[], error_t* error)
+{
+    assert(error);
+    assert(argv);
+
+    const char* file_name = nullptr;
+
+    if (argc > 2)
+        file_name = argv[2];
+    else
+    {
+        PrintGreenText(stdout, "Enter output file name: \n", nullptr);
+        file_name = GetDataFromLine(stdin, error);
+    }
+
+    if (file_name != nullptr)
+        PrintGreenText(stdout, "OUTPUT FILE NAME: \"%s\"\n", file_name);
 
     return file_name;
 }
