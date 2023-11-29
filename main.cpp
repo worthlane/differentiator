@@ -19,14 +19,12 @@ int main(const int argc, const char* argv[])
 
     const char* data_file = GetInputFileName(argc, argv, &error);
     EXIT_IF_ERROR(&error);
-
     FILE* fp = OpenInputFile(data_file, &error);
     EXIT_IF_ERROR(&error);
 
     const char* output_file = GetOutputFileName(argc, argv, &error);
     EXIT_IF_ERROR(&error);
-
-    FILE* out_stream = OpenInputFile(output_file, &error);
+    FILE* out_stream = OpenOutputFile(output_file, &error);
     EXIT_IF_ERROR(&error);
 
     Storage info = {};
@@ -37,7 +35,7 @@ int main(const int argc, const char* argv[])
 
     PrintExpressionTree(stdout, &expr);
 
-    printf("%lf\n", CalculateExpression(&expr, expr.root, &error));
+    printf("%lf\n", CalculateExpression(&expr, &error));
 
     DUMP_EXPRESSION(&expr);
 
@@ -48,7 +46,7 @@ int main(const int argc, const char* argv[])
 
     PrintExpressionTree(stdout, d_expr);
 
-    expr_t* difference = SubExpressions(&expr, d_expr, &error);
+    expr_t* difference = GetExpressionsDifference(&expr, d_expr, &error);
 
     DrawExprGraphic(difference);
 

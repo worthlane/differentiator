@@ -38,15 +38,24 @@
 #endif
 #define VAR(id)   MakeNode(NodeType::VARIABLE, {.var = id}, nullptr, nullptr, nullptr)
 
-#define DEF_OP(name, symb, priority, arg_amt, ...)                                                              \
-                    static inline Node* _##name(Node* left, Node* right = nullptr)                              \
-                    {                                                                                           \
-                        if (arg_amt == 1)                                                                       \
-                        {                                                                                       \
-                            right = left;                                                                       \
-                            left  = nullptr;                                                                    \
-                        }                                                                                       \
-                        return MakeNode(NodeType::OPERATOR, {.opt = Operators::name}, left, right, nullptr);     \
+#define DEF_OP(name, symb, priority, arg_amt, ...)                                                                          \
+                    static inline Node* _##name(Node* left, Node* right = nullptr)                                          \
+                    {                                                                                                       \
+                        if (arg_amt == 1)                                                                                   \
+                        {                                                                                                   \
+                            right = left;                                                                                   \
+                            left  = nullptr;                                                                                \
+                        }                                                                                                   \
+                                                                                                                            \
+                        Node* new_node = MakeNode(NodeType::OPERATOR, {.opt = Operators::name}, left, right, nullptr);      \
+                                                                                                                            \
+                        if (right != nullptr)                                                                               \
+                            right->parent = new_node;                                                                       \
+                                                                                                                            \
+                        if (left != nullptr)                                                                                \
+                            left->parent = new_node;                                                                        \
+                                                                                                                            \
+                        return new_node;                                                                                    \
                     }
 
 #include "operations.h"
@@ -59,14 +68,14 @@
 
 static const double EPSILON  = 1e-9;
 
-static double OperationWithTwoNumbers(const double number_1, const double number_2,
+static double CalculateExpressionSubtree(const expr_t* expr, Node* root, error_t* error);
+
+static double OperatorAction(const double number_1, const double number_2,
                                       const Operators operation, error_t* error);
 
 static bool AreEqual(const double a, const double b);
 
-static void RecalculateExpressionRightSubtree(expr_t* expr, Node* node, error_t* error);
-static void RecalculateExpressionLeftSubtree(expr_t* expr, Node* node, error_t* error);
-static void RecalculateExpressionSubtrees(expr_t* expr, Node* node, error_t* error);
+static void UniteExpressionSubtree(expr_t* expr, Node* node, error_t* error);
 
 // ======================================================================
 // SIMPLIFYING
@@ -75,7 +84,7 @@ static void RecalculateExpressionSubtrees(expr_t* expr, Node* node, error_t* err
 static void SimplifyExpressionConstants(expr_t* expr, Node* node, int* transform_amt, error_t* error);
 static void SimplifyExpressionNeutrals(expr_t* expr, Node* node, int* transform_amt, error_t* error, FILE* fp = nullptr);
 
-static void ReconnectNodesKidWithParent(expr_t* expr, Node* cur_node, Node* kid);
+static Node* ReplaceNodeWithItsKid(expr_t* expr, Node* cur_node, NodeKid kid_side);
 
 static void RemoveNeutralADD(expr_t* expr, Node* node, int* transform_cnt, error_t* error, FILE* fp);
 static void RemoveNeutralSUB(expr_t* expr, Node* node, int* transform_cnt, error_t* error, FILE* fp);
@@ -92,10 +101,8 @@ static Node* Copy(Node* node);
 static Node*   Differentiate(Node* node, const int id, error_t* error);
 static expr_t* DifferentiateExpression(expr_t* expr, const int var_id, error_t* error, FILE* fp);
 
-static void    MakeExpressionWithSameVar(expr_t* expr, const int var_id,
-                                         expr_t** new_expr, variable_t** new_vars, error_t* error);
-static void    MakeExpressionWithSameVar(expr_t* expr, const char* var, int* id,
-                                         expr_t** new_expr, variable_t** new_vars, error_t* error);
+static expr_t* MakeExpressionWithSameVar(expr_t* expr, const char* var, int* id, error_t* error);
+static expr_t* MakeExpressionWithSameVar(expr_t* expr, error_t* error);
 
 static inline int Factorial(const int n);
 
@@ -121,7 +128,7 @@ static bool AreEqual(const double a, const double b)
             case (Operators::name):                             \
                 return action;                                  \
 
-static double OperationWithTwoNumbers(const double number_1, const double number_2,
+static double OperatorAction(const double number_1, const double number_2,
                                       const Operators operation, error_t* error)
 {
     switch (operation)
@@ -137,7 +144,7 @@ static double OperationWithTwoNumbers(const double number_1, const double number
 
 //------------------------------------------------------------------
 
-double CalculateExpression(expr_t* expr, Node* node, error_t* error)
+static double CalculateExpressionSubtree(const expr_t* expr, Node* node, error_t* error)
 {
     assert(expr);
     assert(error);
@@ -155,8 +162,8 @@ double CalculateExpression(expr_t* expr, Node* node, error_t* error)
         }
     }
 
-    double left_result  = CalculateExpression(expr, node->left, error);
-    double right_result = CalculateExpression(expr, node->right, error);
+    double left_result  = CalculateExpressionSubtree(expr, node->left, error);
+    double right_result = CalculateExpressionSubtree(expr, node->right, error);
 
     if (node->type != NodeType::OPERATOR)
     {
@@ -164,13 +171,23 @@ double CalculateExpression(expr_t* expr, Node* node, error_t* error)
         return 0;
     }
 
-    double result = OperationWithTwoNumbers(left_result, right_result, node->value.opt, error);
+    double result = OperatorAction(left_result, right_result, node->value.opt, error);
 
     if (error->code == (int) ExpressionErrors::NONE)
         return result;
     else
         return POISON;
 
+}
+
+//------------------------------------------------------------------
+
+double CalculateExpression(const expr_t* expr, error_t* error)
+{
+    assert(error);
+    assert(expr);
+
+    return CalculateExpressionSubtree(expr, expr->root, error);
 }
 
 //------------------------------------------------------------------
@@ -187,15 +204,18 @@ static void SimplifyExpressionConstants(expr_t* expr, Node* node, int* transform
         return;
 
     SimplifyExpressionConstants(expr, node->left, transform_cnt, error);
-    if (error->code != (int) ExpressionErrors::NONE) return;
+    if (error->code != (int) ExpressionErrors::NONE)
+        return;
+
     SimplifyExpressionConstants(expr, node->right, transform_cnt, error);
-    if (error->code != (int) ExpressionErrors::NONE) return;
+    if (error->code != (int) ExpressionErrors::NONE)
+        return;
 
     if (node->left == nullptr)
     {
         if (node->right->type == NodeType::NUMBER)
         {
-            RecalculateExpressionRightSubtree(expr, node, error);
+            UniteExpressionSubtree(expr, node, error);
             *transform_cnt++;
         }
 
@@ -206,7 +226,7 @@ static void SimplifyExpressionConstants(expr_t* expr, Node* node, int* transform
     {
         if (node->left->type == NodeType::NUMBER)
         {
-            RecalculateExpressionLeftSubtree(expr, node, error);
+            UniteExpressionSubtree(expr, node, error);
             *transform_cnt++;
         }
 
@@ -215,7 +235,7 @@ static void SimplifyExpressionConstants(expr_t* expr, Node* node, int* transform
 
     if (node->left->type == NodeType::NUMBER && node->right->type == NodeType::NUMBER)
     {
-        RecalculateExpressionSubtrees(expr, node, error);
+        UniteExpressionSubtree(expr, node, error);
         *transform_cnt++;
         return;
     }
@@ -223,48 +243,12 @@ static void SimplifyExpressionConstants(expr_t* expr, Node* node, int* transform
 
 //------------------------------------------------------------------
 
-static void RecalculateExpressionRightSubtree(expr_t* expr, Node* node, error_t* error)
+static void UniteExpressionSubtree(expr_t* expr, Node* node, error_t* error)
 {
     assert(expr);
     assert(error);
 
-    double num = CalculateExpression(expr, node, error);
-    if (error->code != (int) ExpressionErrors::NONE)
-        return;
-
-    DestructNodes(node->right);
-
-    node->right     = nullptr;
-    node->type      = NodeType::NUMBER;
-    node->value.val = num;
-}
-
-//------------------------------------------------------------------
-
-static void RecalculateExpressionLeftSubtree(expr_t* expr, Node* node, error_t* error)
-{
-    assert(expr);
-    assert(error);
-
-    double num = CalculateExpression(expr, node, error);
-    if (error->code != (int) ExpressionErrors::NONE)
-        return;
-
-    DestructNodes(node->left);
-
-    node->left      = nullptr;
-    node->type      = NodeType::NUMBER;
-    node->value.val = num;
-}
-
-//------------------------------------------------------------------
-
-static void RecalculateExpressionSubtrees(expr_t* expr, Node* node, error_t* error)
-{
-    assert(expr);
-    assert(error);
-
-    double num = CalculateExpression(expr, node, error);
+    double num = CalculateExpressionSubtree(expr, node, error);
     if (error->code != (int) ExpressionErrors::NONE)
         return;
 
@@ -291,9 +275,11 @@ static void SimplifyExpressionNeutrals(expr_t* expr, Node* node, int* transform_
         return;
 
     SimplifyExpressionNeutrals(expr, node->left, transform_cnt, error, fp);
-    if (error->code != (int) ExpressionErrors::NONE) return;
+    if (error->code != (int) ExpressionErrors::NONE)
+        return;
     SimplifyExpressionNeutrals(expr, node->right, transform_cnt, error, fp);
-    if (error->code != (int) ExpressionErrors::NONE) return;
+    if (error->code != (int) ExpressionErrors::NONE)
+        return;
 
     if (node->type != NodeType::OPERATOR)
     {
@@ -325,12 +311,19 @@ static void SimplifyExpressionNeutrals(expr_t* expr, Node* node, int* transform_
 
 //------------------------------------------------------------------
 
-static void ReconnectNodesKidWithParent(expr_t* expr, Node* cur_node, Node* kid)
+static Node* ReplaceNodeWithItsKid(expr_t* expr, Node* cur_node, NodeKid kid_side)
 {
     assert(expr);
     assert(cur_node);
+
+    Node* kid = nullptr;
+
+    if (kid_side == NodeKid::LEFT)
+        kid = cur_node->left;
+    else
+        kid = cur_node->right;
+
     assert(kid);
-    assert(cur_node->left == kid || cur_node->right == kid);
 
     if (cur_node->parent != nullptr)
         assert(cur_node->parent->left == cur_node || cur_node->parent->right == cur_node);
@@ -353,6 +346,8 @@ static void ReconnectNodesKidWithParent(expr_t* expr, Node* cur_node, Node* kid)
     cur_node->left  = nullptr;
 
     NodeDtor(cur_node);
+
+    return kid->parent;
 }
 
 //------------------------------------------------------------------
@@ -375,7 +370,7 @@ static void RemoveNeutralADD(expr_t* expr, Node* node, int* transform_cnt, error
         (*transform_cnt)++;
 
         DestructNodes(node->left);
-        ReconnectNodesKidWithParent(expr, node, node->right);
+        ReplaceNodeWithItsKid(expr, node, NodeKid::RIGHT);
         PRINT_EXPR(fp, expr);
 
         return;
@@ -386,7 +381,7 @@ static void RemoveNeutralADD(expr_t* expr, Node* node, int* transform_cnt, error
         (*transform_cnt)++;
 
         DestructNodes(node->right);
-        ReconnectNodesKidWithParent(expr, node, node->left);
+        ReplaceNodeWithItsKid(expr, node, NodeKid::LEFT);
         PRINT_EXPR(fp, expr);
     }
 }
@@ -411,7 +406,7 @@ static void RemoveNeutralSUB(expr_t* expr, Node* node, int* transform_cnt, error
         (*transform_cnt)++;
 
         DestructNodes(node->right);
-        ReconnectNodesKidWithParent(expr, node, node->left);
+        ReplaceNodeWithItsKid(expr, node, NodeKid::LEFT);
         PRINT_EXPR(fp, expr);
 
         return;
@@ -456,7 +451,7 @@ static void RemoveNeutralDIV(expr_t* expr, Node* node, int* transform_cnt, error
         (*transform_cnt)++;
 
         DestructNodes(node->right);
-        ReconnectNodesKidWithParent(expr, node, node->left);
+        ReplaceNodeWithItsKid(expr, node, NodeKid::LEFT);
         PRINT_EXPR(fp, expr);
 
         return;
@@ -485,7 +480,7 @@ static void RemoveNeutralMUL(expr_t* expr, Node* node, int* transform_cnt, error
             (*transform_cnt)++;
 
             DestructNodes(node->left);
-            ReconnectNodesKidWithParent(expr, node, node->right);
+            ReplaceNodeWithItsKid(expr, node, NodeKid::RIGHT);
             PRINT_EXPR(fp, expr);
         }
         else if (AreEqual(node->left->value.val, 0))
@@ -493,7 +488,7 @@ static void RemoveNeutralMUL(expr_t* expr, Node* node, int* transform_cnt, error
             (*transform_cnt)++;
 
             DestructNodes(node->right);
-            ReconnectNodesKidWithParent(expr, node, node->left);
+            ReplaceNodeWithItsKid(expr, node, NodeKid::LEFT);
             PRINT_EXPR(fp, expr);
         }
 
@@ -507,7 +502,7 @@ static void RemoveNeutralMUL(expr_t* expr, Node* node, int* transform_cnt, error
             (*transform_cnt)++;
 
             DestructNodes(node->right);
-            ReconnectNodesKidWithParent(expr, node, node->left);
+            ReplaceNodeWithItsKid(expr, node, NodeKid::LEFT);
             PRINT_EXPR(fp, expr);
         }
         else if (AreEqual(node->right->value.val, 0))
@@ -515,7 +510,7 @@ static void RemoveNeutralMUL(expr_t* expr, Node* node, int* transform_cnt, error
             (*transform_cnt)++;
 
             DestructNodes(node->left);
-            ReconnectNodesKidWithParent(expr, node, node->right);
+            ReplaceNodeWithItsKid(expr, node, NodeKid::RIGHT);
             PRINT_EXPR(fp, expr);
         }
     }
@@ -549,7 +544,7 @@ static void RemoveNeutralDEG(expr_t* expr, Node* node, int* transform_cnt, error
             node->right     = nullptr;
             node->type      = NodeType::NUMBER;
             node->value.val = 1;
-            
+
             PRINT_EXPR(fp, expr);
         }
 
@@ -563,7 +558,7 @@ static void RemoveNeutralDEG(expr_t* expr, Node* node, int* transform_cnt, error
             (*transform_cnt)++;
 
             DestructNodes(node->right);
-            ReconnectNodesKidWithParent(expr, node, node->left);
+            ReplaceNodeWithItsKid(expr, node, NodeKid::LEFT);
             PRINT_EXPR(fp, expr);
         }
         else if (AreEqual(node->right->value.val, 0))
@@ -613,6 +608,7 @@ void SimplifyExpression(expr_t* expr, error_t* error, FILE* fp)
         {                                                                                                           \
             assert(node);                                                                                           \
             diff;                                                                                                   \
+                                                                                                                    \
             break;                                                                                                  \
         }                                                                                                           \
 
@@ -655,81 +651,60 @@ static Node* Copy(Node* node)
 {
     if (!node) return nullptr;
 
-    return MakeNode(node->type, node->value, Copy(node->left), Copy(node->right), nullptr);
+    Node* left  = Copy(node->left);
+    Node* right = Copy(node->right);
+
+    Node* new_node = MakeNode(node->type, node->value, left, right, nullptr);
+
+    if (right != nullptr)
+        right->parent = new_node;
+
+    if (left != nullptr)
+        left->parent = new_node;
+
+    return new_node;
 }
 
 //------------------------------------------------------------------
 
-static void MakeExpressionWithSameVar(expr_t* expr, const char* var, int* id,
-                                      expr_t** new_expr, variable_t** new_vars, error_t* error)
+static expr_t* MakeExpressionWithSameVar(expr_t* expr, const char* var, int* id, error_t* error)
 {
     assert(expr);
-    assert(new_expr);
     assert(var);
     assert(id);
-    assert(new_vars);
     assert(error);
 
     int var_id = FindVariableAmongSaved(expr->vars, var);
-    if (var_id == NO_VARIABLE)
-    {
-        error->code = (int) ExpressionErrors::NO_DIFF_VARIABLE;
-        error->data = var;
-        return;
-    }
 
     expr_t* d_expr = MakeExpression(error);
     if (error->code != (int) ExpressionErrors::NONE)
-        return;
+        return nullptr;
 
-    variable_t* d_vars = AllocVariablesArray(error);
+    CopyVariablesArray(expr->vars, d_expr->vars, error);
     if (error->code != (int) ExpressionErrors::NONE)
-        return;
+        return nullptr;
 
-    CopyVariablesArray(expr->vars, d_vars, error);
-    if (error->code != (int) ExpressionErrors::NONE)
-        return;
+    *id = var_id;
 
-    *id       = var_id;
-    *new_expr = d_expr;
-    *new_vars = d_vars;
-
-    SimplifyExpression(expr, error);
+    return d_expr;
 }
 
 //:::::::::::::::::::::::::::::::::::::::::::::::::::::
 
-static void MakeExpressionWithSameVar(expr_t* expr, const int var_id,
-                                      expr_t** new_expr, variable_t** new_vars, error_t* error)
+static expr_t* MakeExpressionWithSameVar(expr_t* expr, error_t* error)
 {
     assert(expr);
-    assert(new_expr);
-    assert(new_vars);
     assert(error);
-
-    if (expr->vars[var_id].isfree == true)
-    {
-        error->code = (int) ExpressionErrors::NO_DIFF_VARIABLE;
-        error->data = "unknown id";         // TODO нормально сделать
-        return;
-    }
 
     expr_t* d_expr = MakeExpression(error);
     if (error->code != (int) ExpressionErrors::NONE)
-        return;
+        return nullptr;
 
-    variable_t* d_vars = AllocVariablesArray(error);
+    CopyVariablesArray(expr->vars, d_expr->vars, error);
     if (error->code != (int) ExpressionErrors::NONE)
-        return;
+        return nullptr;
 
-    CopyVariablesArray(expr->vars, d_vars, error);
-    if (error->code != (int) ExpressionErrors::NONE)
-        return;
-
-    *new_expr = d_expr;
-    *new_vars = d_vars;
-
-    SimplifyExpression(expr, error);
+    return d_expr;
 }
 
 //------------------------------------------------------------------
@@ -740,10 +715,8 @@ expr_t* DifferentiateExpression(expr_t* expr, const char* var, error_t* error, F
     assert(expr);
     assert(error);
 
-    int         var_id  = NO_VARIABLE;
-    expr_t*     d_expr  = nullptr;
-    variable_t* vars    = nullptr;
-    MakeExpressionWithSameVar(expr, var, &var_id, &d_expr, &vars, error);
+    int     var_id = NO_VARIABLE;
+    expr_t* d_expr = MakeExpressionWithSameVar(expr, var, &var_id, error);
     if (error->code != (int) ExpressionErrors::NONE)
         return nullptr;
 
@@ -751,10 +724,7 @@ expr_t* DifferentiateExpression(expr_t* expr, const char* var, error_t* error, F
     if (error->code != (int) ExpressionErrors::NONE)
         return nullptr;
 
-    ConnectNodesWithParents(root);
-
     d_expr->root = root;
-    d_expr->vars = vars;
 
     PRINT_EXPR(fp, expr);
 
@@ -770,9 +740,7 @@ static expr_t* DifferentiateExpression(expr_t* expr, const int var_id, error_t* 
     assert(expr);
     assert(error);
 
-    expr_t*     d_expr  = nullptr;
-    variable_t* vars    = nullptr;
-    MakeExpressionWithSameVar(expr, var_id, &d_expr, &vars, error);
+    expr_t* d_expr  = MakeExpressionWithSameVar(expr, error);
     if (error->code != (int) ExpressionErrors::NONE)
         return nullptr;
 
@@ -780,10 +748,7 @@ static expr_t* DifferentiateExpression(expr_t* expr, const int var_id, error_t* 
     if (error->code != (int) ExpressionErrors::NONE)
         return nullptr;
 
-    ConnectNodesWithParents(root);
-
     d_expr->root = root;
-    d_expr->vars = vars;
 
     PRINT_EXPR(fp, expr);
 
@@ -818,10 +783,8 @@ expr_t* TaylorSeries(expr_t* expr, const int n, const char* var, const double va
     assert(expr);
     assert(error);
 
-    int         var_id    = NO_VARIABLE;
-    expr_t*     new_expr  = nullptr;
-    variable_t* vars      = nullptr;
-    MakeExpressionWithSameVar(expr, var, &var_id, &new_expr, &vars, error);
+    int     var_id    = NO_VARIABLE;
+    expr_t* new_expr = MakeExpressionWithSameVar(expr, var, &var_id, error);
     if (error->code != (int) ExpressionErrors::NONE)
         return nullptr;
 
@@ -829,7 +792,7 @@ expr_t* TaylorSeries(expr_t* expr, const int n, const char* var, const double va
     expr->vars[var_id].value = val;
 
     expr_t* diff_expr     = expr;
-    double  calc          = CalculateExpression(diff_expr, diff_expr->root, error);
+    double  calc          = CalculateExpressionSubtree(diff_expr, diff_expr->root, error);
     Node*   taylor_series = NUM(0);
 
     for (int i = 0; i <= n; i++)
@@ -843,15 +806,12 @@ expr_t* TaylorSeries(expr_t* expr, const int n, const char* var, const double va
         if (error->code != (int) ExpressionErrors::NONE)
             return nullptr;
 
-        calc = CalculateExpression(diff_expr, diff_expr->root, error);
+        calc = CalculateExpressionSubtree(diff_expr, diff_expr->root, error);
         if (error->code != (int) ExpressionErrors::NONE)
             return nullptr;
     }
 
-    ConnectNodesWithParents(taylor_series);
-
     new_expr->root = taylor_series;
-    new_expr->vars = vars;
 
     SimplifyExpression(new_expr, error, fp);
 
@@ -862,7 +822,7 @@ expr_t* TaylorSeries(expr_t* expr, const int n, const char* var, const double va
 
 //------------------------------------------------------------------
 
-expr_t* SubExpressions(expr_t* expr_1, expr_t* expr_2, error_t* error, FILE* fp)
+expr_t* GetExpressionsDifference(expr_t* expr_1, expr_t* expr_2, error_t* error, FILE* fp)
 {
     assert(expr_2);
     assert(expr_1);
@@ -872,7 +832,7 @@ expr_t* SubExpressions(expr_t* expr_1, expr_t* expr_2, error_t* error, FILE* fp)
     if (error->code != (int) ExpressionErrors::NONE)
         return nullptr;
 
-    variable_t* new_vars = AllocVariablesArray(error);
+    variable_t* new_vars = MakeVariablesArray(error, expr_1->max_vars_amt);
     if (error->code != (int) ExpressionErrors::NONE)
         return nullptr;
 
@@ -881,8 +841,6 @@ expr_t* SubExpressions(expr_t* expr_1, expr_t* expr_2, error_t* error, FILE* fp)
         return nullptr;
 
     Node* root = _SUB(CPY(expr_1->root), CPY(expr_2->root));
-
-    ConnectNodesWithParents(root);
 
     new_expr->root = root;
     new_expr->vars = new_vars;
@@ -900,10 +858,8 @@ expr_t* GetTangent(expr_t* expr, const char* var, const double val, error_t* err
     assert(expr);
     assert(error);
 
-    int         var_id    = NO_VARIABLE;
-    expr_t*     new_expr  = nullptr;
-    variable_t* vars      = nullptr;
-    MakeExpressionWithSameVar(expr, var, &var_id, &new_expr, &vars, error);
+    int         var_id   = NO_VARIABLE;
+    expr_t*     new_expr = MakeExpressionWithSameVar(expr, var, &var_id, error);
     if (error->code != (int) ExpressionErrors::NONE)
         return nullptr;
 
@@ -921,10 +877,7 @@ expr_t* GetTangent(expr_t* expr, const char* var, const double val, error_t* err
 
     Node* root = _ADD(NUM(b), _MUL(VAR(var_id), NUM(tang)));
 
-    ConnectNodesWithParents(root);
-
     new_expr->root = root;
-    new_expr->vars = vars;
 
     SimplifyExpression(new_expr, error);
 
@@ -944,10 +897,10 @@ static void CalculateLinearParams(expr_t* expr, const int var_id, double* tang, 
     expr_t* d_expr   = DifferentiateExpression(expr, var_id, error, fp);
     if (error->code != (int) ExpressionErrors::NONE) return;
 
-    double  tan      = CalculateExpression(d_expr, d_expr->root, error);
+    double  tan      = CalculateExpressionSubtree(d_expr, d_expr->root, error);
     if (error->code != (int) ExpressionErrors::NONE) return;
 
-    double  func_val = CalculateExpression(expr, expr->root, error);
+    double  func_val = CalculateExpressionSubtree(expr, expr->root, error);
     if (error->code != (int) ExpressionErrors::NONE) return;
 
     *b    = func_val - (tan * expr->vars[var_id].value);

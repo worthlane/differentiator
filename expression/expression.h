@@ -60,7 +60,7 @@ enum class Operators
 {
     #include "operations.h"
 
-    UNK
+    UNKNOWN
 };
 
 #undef DEF_OP
@@ -89,8 +89,8 @@ static const size_t MAX_VARIABLES_AMT = 50;
 static const size_t MAX_VARIABLE_LEN  = 100;
 static const int    NO_VARIABLE       = -1;
 
-variable_t* AllocVariablesArray(error_t* error);
-void        DestructVariablesArray(variable_t* variables);
+variable_t* MakeVariablesArray(error_t* error, const size_t size);
+void        DestructVariablesArray(variable_t* variables, const size_t size);
 
 int         SaveVariable(variable_t* vars, const char* new_var);
 int         FindVariableAmongSaved(variable_t* vars, const char* new_var);
@@ -117,6 +117,12 @@ union NodeValue
     int         var;
 };
 static const NodeValue ZERO_VALUE = {.val = 0};
+
+enum class NodeKid
+{
+    RIGHT,
+    LEFT
+};
 
 struct Node
 {
@@ -146,7 +152,7 @@ ExpressionErrors NodeVerify(const Node* node, error_t* error);
                                             return node_err_;                                       \
                                     } while(0)
 
-void ConnectNodesWithParents(Node* node);
+void LinkNodesWithParents(Node* node);
 
 // ======================================================================
 // EXPRESSION STRUCT
@@ -157,10 +163,13 @@ struct Expression
     Node* root;
 
     variable_t* vars;
+
+    size_t max_vars_amt;
 };
 typedef struct Expression expr_t;
 
 ExpressionErrors    ExpressionCtor(expr_t* expr, error_t* error);
+ExpressionErrors    ExpressionCtor(expr_t* expr, const size_t size, error_t* error);
 expr_t*             MakeExpression(error_t* error);
 void                ExpressionDtor(expr_t* expr);
 
@@ -180,7 +189,7 @@ ExpressionErrors ExpressionVerify(const expr_t* expr, error_t* error);
 // OTHERS
 // ======================================================================
 
-bool FindVarInTree(Node* node, const int id);
+bool IsVarInTree(Node* node, const int var_id);
 
 #endif
 

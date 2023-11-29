@@ -15,19 +15,20 @@ static ExpressionErrors  VerifyNodes(const Node* node, error_t* error);
 // EXPRESSION VARIABLES
 // ======================================================================
 
-static void InitVariablesArray(variable_t* variables);
+static void InitVariablesArray(variable_t* variables, const size_t size);
 
 //-----------------------------------------------------------------------------------------------------
 
-variable_t* AllocVariablesArray(error_t* error)
+variable_t* MakeVariablesArray(error_t* error, const size_t size)
 {
-    variable_t* vars = (variable_t*) calloc(MAX_VARIABLES_AMT, sizeof(variable_t));
+    variable_t* vars = (variable_t*) calloc(size, sizeof(variable_t));
     if (vars == nullptr)
     {
         error->code = (int) ExpressionErrors::ALLOCATE_MEMORY;
         error->data = "VARIABLES ARRAY";
         return nullptr;
     }
+    InitVariablesArray(vars, size);
 
     return vars;
 }
@@ -35,11 +36,11 @@ variable_t* AllocVariablesArray(error_t* error)
 
 //------------------------------------------------------------------
 
-static void InitVariablesArray(variable_t* variables)
+static void InitVariablesArray(variable_t* variables, const size_t size)
 {
     assert(variables);
 
-    for (size_t i = 0; i < MAX_VARIABLES_AMT; i++)
+    for (size_t i = 0; i < size; i++)
     {
         variables[i].isfree        = true;
         variables[i].variable_name = "";
@@ -49,14 +50,15 @@ static void InitVariablesArray(variable_t* variables)
 
 //------------------------------------------------------------------
 
-void DestructVariablesArray(variable_t* variables)
+void DestructVariablesArray(variable_t* variables, const size_t size)
 {
     assert(variables);
 
-    for (size_t i = 0; i < MAX_VARIABLES_AMT; i++)
+    for (size_t i = 0; i < size; i++)
     {
-        if (!variables[i].variable_name)
+        if (variables[i].variable_name != nullptr)
             free(variables[i].variable_name);
+
         variables[i].isfree = true;
         variables[i].value  = 0;
     }
@@ -88,7 +90,7 @@ void CopyVariablesArray(const variable_t* vars, variable_t* dest, error_t* error
 
 //-----------------------------------------------------------------------------------------------------
 
-bool FindVarInTree(Node* node, const int id)
+bool IsVarInTree(Node* node, const int id)
 {
     if (!node)
         return false;
@@ -96,8 +98,8 @@ bool FindVarInTree(Node* node, const int id)
     if (node->type == NodeType::VARIABLE && node->value.var == id)
         return true;
 
-    bool var_in_left_subtree  = FindVarInTree(node->left, id);
-    bool var_in_right_subtree = FindVarInTree(node->right, id);
+    bool var_in_left_subtree  = IsVarInTree(node->left, id);
+    bool var_in_right_subtree = IsVarInTree(node->right, id);
 
     return (var_in_left_subtree || var_in_right_subtree);
 }
@@ -176,12 +178,12 @@ void NodeDtor(Node* node)
 
 //-----------------------------------------------------------------------------------------------------
 
-void ConnectNodesWithParents(Node* node)
+void LinkNodesWithParents(Node* node)
 {
     if (!node) return;
 
-    ConnectNodesWithParents(node->left);
-    ConnectNodesWithParents(node->right);
+    LinkNodesWithParents(node->left);
+    LinkNodesWithParents(node->right);
 
     if (node->left != nullptr)
         node->left->parent = node;
@@ -197,12 +199,28 @@ ExpressionErrors ExpressionCtor(expr_t* expr, error_t* error)
 {
     Node* root = MakeNode(PZN_TYPE, ZERO_VALUE, nullptr, nullptr, nullptr);
 
-    variable_t* vars = AllocVariablesArray(error);
+    variable_t* vars = MakeVariablesArray(error, MAX_VARIABLES_AMT);
     RETURN_IF_EXPRESSION_ERROR((ExpressionErrors) error->code);
-    InitVariablesArray(vars);
 
-    expr->vars = vars;
-    expr->root = root;
+    expr->vars         = vars;
+    expr->root         = root;
+    expr->max_vars_amt = MAX_VARIABLES_AMT;
+
+    return ExpressionErrors::NONE;
+}
+
+// :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+ExpressionErrors ExpressionCtor(expr_t* expr, const size_t size, error_t* error)
+{
+    Node* root = MakeNode(PZN_TYPE, ZERO_VALUE, nullptr, nullptr, nullptr);
+
+    variable_t* vars = MakeVariablesArray(error, size);
+    RETURN_IF_EXPRESSION_ERROR((ExpressionErrors) error->code);
+
+    expr->vars         = vars;
+    expr->root         = root;
+    expr->max_vars_amt = size;
 
     return ExpressionErrors::NONE;
 }
@@ -235,9 +253,10 @@ void ExpressionDtor(expr_t* expr)
 {
     DestructNodes(expr->root);
 
-    DestructVariablesArray(expr->vars);
+    DestructVariablesArray(expr->vars, expr->max_vars_amt);
     free(expr->vars);
-    expr->root = nullptr;
+    expr->max_vars_amt = 0;
+    expr->root         = nullptr;
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -302,7 +321,7 @@ int PrintExpressionError(FILE* fp, const void* err, const char* func, const char
             return (int) error->code;
 
         case (ExpressionErrors::UNKNOWN_OPERATION):
-            fprintf(fp, "UNKNOWN OPERATION<br>\n"); // TODO add data
+            fprintf(fp, "UNKNOWN OPERATION<br>\n");
             LOG_END();
             return (int) error->code;
 

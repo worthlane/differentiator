@@ -630,7 +630,7 @@ static void ReadNodeData(expr_t* expr, Storage* info, NodeType* type, NodeValue*
 
     Operators sign = DefineOperator(word);
 
-    if (sign != Operators::UNK)
+    if (sign != Operators::UNKNOWN)
     {
         *type            = NodeType::OPERATOR;
         value->opt = sign;
@@ -685,7 +685,7 @@ static Operators DefineOperator(const char* word)
 
     #include "operations.h"
 
-    /* else */ return Operators::UNK;
+    /* else */ return Operators::UNKNOWN;
 }
 
 #undef DEF_OP
