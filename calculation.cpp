@@ -15,10 +15,10 @@
             PrintExpressionTreeLatex(fp, expr);                 \
         }
 
-#ifdef PRANK
-#undef PRANK
+#ifdef PRINT_PRANK
+#undef PRINT_PRANK
 #endif
-#define PRANK(fp)                              \
+#define PRINT_PRANK(fp)                              \
         if (fp != nullptr)                                      \
         {                                                   \
             PrintPrankPhrase(fp);                           \
@@ -604,7 +604,7 @@ void SimplifyExpression(expr_t* expr, error_t* error, FILE* fp)
 
         if (cnt != 0)
         {
-            PRANK(fp);
+            PRINT_PRANK(fp);
             PRINT_EXPR(fp, expr);
         }
 
@@ -614,7 +614,7 @@ void SimplifyExpression(expr_t* expr, error_t* error, FILE* fp)
 
         if (cnt != save_cnt)
         {
-            PRANK(fp);
+            PRINT_PRANK(fp);
             PRINT_EXPR(fp, expr);
         }
     }
@@ -748,7 +748,7 @@ expr_t* DifferentiateExpression(expr_t* expr, const char* var, error_t* error, F
 
     d_expr->root = root;
 
-    PRANK(fp);
+    PRINT_PRANK(fp);
 
     SimplifyExpression(d_expr, error, fp);
 
@@ -880,7 +880,7 @@ expr_t* GetExpressionsDifference(expr_t* expr_1, expr_t* expr_2, error_t* error,
     new_expr->root = root;
     new_expr->vars = new_vars;
 
-    PRANK(fp);
+    PRINT_PRANK(fp);
     PRINT_EXPR(fp, new_expr);
 
     SimplifyExpression(new_expr, error, fp);
@@ -920,7 +920,7 @@ expr_t* GetTangent(expr_t* expr, const char* var, const double val, error_t* err
 
     new_expr->root = root;
 
-    PRANK(fp);
+    PRINT_PRANK(fp);
     PRINT_EXPR(fp, new_expr);
 
     expr->vars[var_id].value = prev_val;
