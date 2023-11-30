@@ -4,6 +4,7 @@
 #include "calculation.h"
 #include "expression/visual.h"
 #include "expression/expr_input_and_output.h"
+#include "common/input_and_output.h"
 
 #ifdef PRINT_EXPR
 #undef PRINT_EXPR
@@ -12,6 +13,24 @@
         if (fp != nullptr)                                      \
         {                                                   \
             PrintExpressionTreeLatex(fp, expr);                 \
+        }
+
+#ifdef PRANK
+#undef PRANK
+#endif
+#define PRANK(fp)                              \
+        if (fp != nullptr)                                      \
+        {                                                   \
+            PrintPrankPhrase(fp);                           \
+        }
+
+#ifdef PRINT
+#undef PRINT
+#endif
+#define PRINT(fp, string)                                       \
+        if (fp != nullptr)                                      \
+        {                                                   \
+            fprintf(fp, string);                                 \
         }
 
 // ======================================================================
@@ -371,7 +390,6 @@ static void RemoveNeutralADD(expr_t* expr, Node* node, int* transform_cnt, error
 
         DestructNodes(node->left);
         ReplaceNodeWithItsKid(expr, node, NodeKid::RIGHT);
-        PRINT_EXPR(fp, expr);
 
         return;
     }
@@ -382,7 +400,6 @@ static void RemoveNeutralADD(expr_t* expr, Node* node, int* transform_cnt, error
 
         DestructNodes(node->right);
         ReplaceNodeWithItsKid(expr, node, NodeKid::LEFT);
-        PRINT_EXPR(fp, expr);
     }
 }
 
@@ -407,7 +424,6 @@ static void RemoveNeutralSUB(expr_t* expr, Node* node, int* transform_cnt, error
 
         DestructNodes(node->right);
         ReplaceNodeWithItsKid(expr, node, NodeKid::LEFT);
-        PRINT_EXPR(fp, expr);
 
         return;
     }
@@ -426,8 +442,6 @@ static void RemoveNeutralSUB(expr_t* expr, Node* node, int* transform_cnt, error
         node->value.val = 0;
         node->left      = nullptr;
         node->right     = nullptr;
-
-        PRINT_EXPR(fp, expr);
     }
 }
 
@@ -452,7 +466,6 @@ static void RemoveNeutralDIV(expr_t* expr, Node* node, int* transform_cnt, error
 
         DestructNodes(node->right);
         ReplaceNodeWithItsKid(expr, node, NodeKid::LEFT);
-        PRINT_EXPR(fp, expr);
 
         return;
     }
@@ -481,7 +494,6 @@ static void RemoveNeutralMUL(expr_t* expr, Node* node, int* transform_cnt, error
 
             DestructNodes(node->left);
             ReplaceNodeWithItsKid(expr, node, NodeKid::RIGHT);
-            PRINT_EXPR(fp, expr);
         }
         else if (AreEqual(node->left->value.val, 0))
         {
@@ -489,7 +501,6 @@ static void RemoveNeutralMUL(expr_t* expr, Node* node, int* transform_cnt, error
 
             DestructNodes(node->right);
             ReplaceNodeWithItsKid(expr, node, NodeKid::LEFT);
-            PRINT_EXPR(fp, expr);
         }
 
         return;
@@ -503,7 +514,6 @@ static void RemoveNeutralMUL(expr_t* expr, Node* node, int* transform_cnt, error
 
             DestructNodes(node->right);
             ReplaceNodeWithItsKid(expr, node, NodeKid::LEFT);
-            PRINT_EXPR(fp, expr);
         }
         else if (AreEqual(node->right->value.val, 0))
         {
@@ -511,7 +521,6 @@ static void RemoveNeutralMUL(expr_t* expr, Node* node, int* transform_cnt, error
 
             DestructNodes(node->left);
             ReplaceNodeWithItsKid(expr, node, NodeKid::RIGHT);
-            PRINT_EXPR(fp, expr);
         }
     }
 }
@@ -544,8 +553,6 @@ static void RemoveNeutralDEG(expr_t* expr, Node* node, int* transform_cnt, error
             node->right     = nullptr;
             node->type      = NodeType::NUMBER;
             node->value.val = 1;
-
-            PRINT_EXPR(fp, expr);
         }
 
         return;
@@ -559,7 +566,6 @@ static void RemoveNeutralDEG(expr_t* expr, Node* node, int* transform_cnt, error
 
             DestructNodes(node->right);
             ReplaceNodeWithItsKid(expr, node, NodeKid::LEFT);
-            PRINT_EXPR(fp, expr);
         }
         else if (AreEqual(node->right->value.val, 0))
         {
@@ -572,8 +578,6 @@ static void RemoveNeutralDEG(expr_t* expr, Node* node, int* transform_cnt, error
             node->right     = nullptr;
             node->type      = NodeType::NUMBER;
             node->value.val = 1;
-
-            PRINT_EXPR(fp, expr);
         }
     }
 }
@@ -585,6 +589,9 @@ void SimplifyExpression(expr_t* expr, error_t* error, FILE* fp)
     assert(expr);
     assert(error);
 
+    PRINT_EXPR(fp, expr);
+    PRINT(fp, "Lets simplify this expression.\n");
+
     int cnt = 1;
     while (cnt != 0)
     {
@@ -593,11 +600,23 @@ void SimplifyExpression(expr_t* expr, error_t* error, FILE* fp)
         if (error->code != (int) ExpressionErrors::NONE)
             return;
 
-        PRINT_EXPR(fp, expr);
+        int save_cnt = cnt;
+
+        if (cnt != 0)
+        {
+            PRANK(fp);
+            PRINT_EXPR(fp, expr);
+        }
 
         SimplifyExpressionNeutrals(expr, expr->root, &cnt, error, fp);
         if (error->code != (int) ExpressionErrors::NONE)
             return;
+
+        if (cnt != save_cnt)
+        {
+            PRANK(fp);
+            PRINT_EXPR(fp, expr);
+        }
     }
 }
 
@@ -715,6 +734,9 @@ expr_t* DifferentiateExpression(expr_t* expr, const char* var, error_t* error, F
     assert(expr);
     assert(error);
 
+    PRINT_EXPR(fp, expr);
+    PRINT(fp, "LET'S DIFFERENTIATE THIS!!!\n");
+
     int     var_id = NO_VARIABLE;
     expr_t* d_expr = MakeExpressionWithSameVar(expr, var, &var_id, error);
     if (error->code != (int) ExpressionErrors::NONE)
@@ -726,7 +748,7 @@ expr_t* DifferentiateExpression(expr_t* expr, const char* var, error_t* error, F
 
     d_expr->root = root;
 
-    PRINT_EXPR(fp, expr);
+    PRANK(fp);
 
     SimplifyExpression(d_expr, error, fp);
 
@@ -740,6 +762,8 @@ static expr_t* DifferentiateExpression(expr_t* expr, const int var_id, error_t* 
     assert(expr);
     assert(error);
 
+    PRINT(fp, "After differentiation:\n");
+
     expr_t* d_expr  = MakeExpressionWithSameVar(expr, error);
     if (error->code != (int) ExpressionErrors::NONE)
         return nullptr;
@@ -750,7 +774,7 @@ static expr_t* DifferentiateExpression(expr_t* expr, const int var_id, error_t* 
 
     d_expr->root = root;
 
-    PRINT_EXPR(fp, expr);
+    PRINT_EXPR(fp, d_expr);
 
     SimplifyExpression(d_expr, error, fp);
 
@@ -783,6 +807,9 @@ expr_t* TaylorSeries(expr_t* expr, const int n, const char* var, const double va
     assert(expr);
     assert(error);
 
+    PRINT(fp, "Lets find taylor series of:\n");
+    PRINT_EXPR(fp, expr);
+
     int     var_id    = NO_VARIABLE;
     expr_t* new_expr = MakeExpressionWithSameVar(expr, var, &var_id, error);
     if (error->code != (int) ExpressionErrors::NONE)
@@ -802,7 +829,10 @@ expr_t* TaylorSeries(expr_t* expr, const int n, const char* var, const double va
                                   _DEG(_SUB(VAR(var_id), NUM(expr->vars[var_id].value)),
                                        NUM((double) i))));
 
-        diff_expr = DifferentiateExpression(diff_expr, var_id, error, nullptr);
+        PRINT(fp, "We need to differentiate this:\n");
+        PRINT_EXPR(fp, diff_expr);
+
+        diff_expr = DifferentiateExpression(diff_expr, var_id, error, fp);
         if (error->code != (int) ExpressionErrors::NONE)
             return nullptr;
 
@@ -828,6 +858,11 @@ expr_t* GetExpressionsDifference(expr_t* expr_1, expr_t* expr_2, error_t* error,
     assert(expr_1);
     assert(error);
 
+    PRINT(fp, "Lets find out difference between:\n");
+    PRINT_EXPR(fp, expr_1);
+    PRINT(fp, "and\n");
+    PRINT_EXPR(fp, expr_2);
+
     expr_t* new_expr = MakeExpression(error);
     if (error->code != (int) ExpressionErrors::NONE)
         return nullptr;
@@ -845,6 +880,9 @@ expr_t* GetExpressionsDifference(expr_t* expr_1, expr_t* expr_2, error_t* error,
     new_expr->root = root;
     new_expr->vars = new_vars;
 
+    PRANK(fp);
+    PRINT_EXPR(fp, new_expr);
+
     SimplifyExpression(new_expr, error, fp);
 
     return new_expr;
@@ -857,6 +895,9 @@ expr_t* GetTangent(expr_t* expr, const char* var, const double val, error_t* err
     assert(var);
     assert(expr);
     assert(error);
+
+    PRINT_EXPR(fp, expr);
+    PRINT(fp, "Lets find tangent!\n");
 
     int         var_id   = NO_VARIABLE;
     expr_t*     new_expr = MakeExpressionWithSameVar(expr, var, &var_id, error);
@@ -879,7 +920,8 @@ expr_t* GetTangent(expr_t* expr, const char* var, const double val, error_t* err
 
     new_expr->root = root;
 
-    SimplifyExpression(new_expr, error);
+    PRANK(fp);
+    PRINT_EXPR(fp, new_expr);
 
     expr->vars[var_id].value = prev_val;
 
@@ -894,8 +936,12 @@ static void CalculateLinearParams(expr_t* expr, const int var_id, double* tang, 
     assert(tang);
     assert(b);
 
+    PRINT(fp, "We must differentiate expression to find tangent parameters.\n")
+
     expr_t* d_expr   = DifferentiateExpression(expr, var_id, error, fp);
     if (error->code != (int) ExpressionErrors::NONE) return;
+
+    PrintExpressionTree(stdout, d_expr);
 
     double  tan      = CalculateExpressionSubtree(d_expr, d_expr->root, error);
     if (error->code != (int) ExpressionErrors::NONE) return;
@@ -905,6 +951,8 @@ static void CalculateLinearParams(expr_t* expr, const int var_id, double* tang, 
 
     *b    = func_val - (tan * expr->vars[var_id].value);
     *tang = tan;
+
+    printf("%lg %lg\n", *b, *tang);
 
     ExpressionDtor(d_expr);
 

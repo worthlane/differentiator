@@ -56,7 +56,7 @@ void DestructVariablesArray(variable_t* variables, const size_t size)
 
     for (size_t i = 0; i < size; i++)
     {
-        if (variables[i].variable_name != nullptr)
+        if (variables[i].isfree == false)
             free(variables[i].variable_name);
 
         variables[i].isfree = true;

@@ -146,7 +146,7 @@ static void SwapNullsToNewLineSymb(char* buf, const off_t text_len)
 
 //-------------------------------------------------------------------------------------------
 
-int CreateTextStorage(struct Storage* info, struct ErrorInfo* error, const char* FILE_NAME)
+int CreateTextStorage(struct LinesStorage* info, struct ErrorInfo* error, const char* FILE_NAME)
 {
     assert(info);
 
@@ -260,7 +260,7 @@ bool PrintSeparator(FILE* stream)
 
 //-----------------------------------------------------------------------------------------------------
 
-void SkipBufSpaces(Storage* info)
+void SkipBufSpaces(LinesStorage* info)
 {
     int ch = 0;
     ch = Bufgetc(info);
@@ -273,7 +273,7 @@ void SkipBufSpaces(Storage* info)
 
 //-----------------------------------------------------------------------------------------------------
 
-int Bufgetc(Storage* info)
+int Bufgetc(LinesStorage* info)
 {
     int ch = info->buf[(info->ptr)++];
 
@@ -282,14 +282,14 @@ int Bufgetc(Storage* info)
 
 //-----------------------------------------------------------------------------------------------------
 
-void Bufungetc(Storage* info)
+void Bufungetc(LinesStorage* info)
 {
     info->ptr--;
 }
 
 //-----------------------------------------------------------------------------------------------------
 
-int BufScanfWord(Storage* info, char* dest)
+int BufScanfWord(LinesStorage* info, char* dest)
 {
     assert(dest);
 
@@ -302,7 +302,7 @@ int BufScanfWord(Storage* info, char* dest)
 
 //-----------------------------------------------------------------------------------------------------
 
-int BufScanfDouble(Storage* info, double* number)
+int BufScanfDouble(LinesStorage* info, double* number)
 {
     assert(number);
 

@@ -173,14 +173,20 @@ const char* GetOutputFileName(const int argc, const char* argv[], error_t* error
 
 void PrintPrankPhrase(FILE* fp)
 {
-    static const int   PHRASE_AMT = 5;
-    static const char* PHRASES[] = {"Очевидно, что",
-                                    "Несложно показать, что",
-                                    "При виде формулы становится ясно, что",
-                                    "Нет такого?",
-                                    "Согл?"};
+    static const int   PHRASE_AMT = 11;
+    static const char* PHRASES[] = {"After elementary simplifications, it is obvious that it is equal to",
+                                    "For any listener of Lukashov, at the sight of this expression immediately comes to mind",
+                                    "ARE YOU SURPRISED???? It is clear to the hedgehog that this is the same as",
+                                    "Let's not bother with obvious proof that this is",
+                                    "You are obliged to stop further studies at the university if it is not obvious to you that this is equal to",
+                                    "I would justify this transition, but the article will be more useful if you do it yourself",
+                                    "At that very lecture you missed, it was proved that this is equal to",
+                                    "This explanation is available only for premium readers of this article (4862 8784 4592 1552)",
+                                    "Zhirinovsky suggested to do this simplification",
+                                    "djwfjawdfjifibjewfweiuofawubiefwuiwbufwbusdkdksadiwqioefw",
+                                    "Are you really still reading this?"};
 
-    int nmb = rand() % 5;
+    int nmb = rand() % PHRASE_AMT;
 
     fprintf(fp, "%s ", PHRASES[nmb]);
 }

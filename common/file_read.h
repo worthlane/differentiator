@@ -22,7 +22,7 @@ struct LineInfo
 /************************************************************//**
  * @brief Storage with info about buffer
  ************************************************************/
-struct Storage
+struct LinesStorage
 {
     size_t line_amt;            /// amount of lines
     off_t text_len;             /// amount of symbols in buffer
@@ -69,7 +69,7 @@ void PrintOneLine(FILE* stream, const struct LineInfo* line, struct ErrorInfo* e
  * @param[in] FILE_NAME file name
  * @return int error code
  ************************************************************/
-int CreateTextStorage(struct Storage* info, struct ErrorInfo* error, const char* FILE_NAME);
+int CreateTextStorage(struct LinesStorage* info, struct ErrorInfo* error, const char* FILE_NAME);
 
 /************************************************************//**
  * @brief Clears file from text in it
@@ -113,17 +113,17 @@ bool PrintSeparator(FILE* stream);
  *
  * @param[in] info storage
  ************************************************************/
-inline void DestructTextStorage(struct Storage* info)
+inline void DestructTextStorage(struct LinesStorage* info)
 {
     free(info->lines);
     free(info->buf);
 }
 
-void Bufungetc(Storage* info);
-int  Bufgetc(Storage* info);
-void SkipBufSpaces(Storage* info);
+void Bufungetc(LinesStorage* info);
+int  Bufgetc(LinesStorage* info);
+void SkipBufSpaces(LinesStorage* info);
 
-int  BufScanfWord(Storage* info, char* dest);
-int  BufScanfDouble(Storage* info, double* number);
+int  BufScanfWord(LinesStorage* info, char* dest);
+int  BufScanfDouble(LinesStorage* info, double* number);
 
 #endif

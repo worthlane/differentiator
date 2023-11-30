@@ -36,8 +36,8 @@ void  PrintNodeData(FILE* fp, const expr_t* expr, const Node* node);
 
 void    PrintExpressionTree(FILE* fp, const expr_t* expr);
 void    PrintExpressionTreeLatex(FILE* fp, const expr_t* expr);
-void    ExpressionInfixRead(Storage* info, expr_t* expr, error_t* error);
-void    ExpressionPrefixRead(Storage* info, expr_t* expr, error_t* error);
+void    ExpressionInfixRead(LinesStorage* info, expr_t* expr, error_t* error);
+void    ExpressionPrefixRead(LinesStorage* info, expr_t* expr, error_t* error);
 int     ExpressionDump(FILE* fp, const void* nodes, const char* func, const char* file, const int line);
 
 #ifdef DUMP_EXPRESSION
@@ -53,7 +53,7 @@ int     ExpressionDump(FILE* fp, const void* nodes, const char* func, const char
 // ======================================================================
 
 void DrawExprGraphic(const expr_t* expr);
-void DrawTwoExprGraphics(const expr_t* expr_1, const expr_t* expr_2);       // TODO несколько в одной 
+void DrawTwoExprGraphics(const expr_t* expr_1, const expr_t* expr_2);       // TODO несколько в одной
 
 
 

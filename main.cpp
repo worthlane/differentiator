@@ -27,30 +27,24 @@ int main(const int argc, const char* argv[])
     FILE* out_stream = OpenOutputFile(output_file, &error);
     EXIT_IF_ERROR(&error);
 
-    Storage info = {};
+    LinesStorage info = {};
     CreateTextStorage(&info, &error, data_file);
 
     ExpressionInfixRead(&info, &expr, &error);
     EXIT_IF_EXPRESSION_ERROR(&error);
 
-    PrintExpressionTree(stdout, &expr);
-
     printf("%lf\n", CalculateExpression(&expr, &error));
 
-    DUMP_EXPRESSION(&expr);
-
-    SimplifyExpression(&expr, &error, out_stream);
-
-    expr_t* d_expr = TaylorSeries(&expr, 3, "x", 8, &error, out_stream);
+    expr_t* d_expr = DifferentiateExpression(&expr, "x", &error, out_stream);
     EXIT_IF_EXPRESSION_ERROR(&error);
 
-    PrintExpressionTree(stdout, d_expr);
+    expr_t* expr_2 = DifferentiateExpression(d_expr, "x", &error, out_stream);
+    EXIT_IF_EXPRESSION_ERROR(&error);
 
-    expr_t* difference = GetExpressionsDifference(&expr, d_expr, &error);
+    expr_t* expr_3 = DifferentiateExpression(expr_2, "x", &error, out_stream);
+    EXIT_IF_EXPRESSION_ERROR(&error);
 
-    DrawExprGraphic(difference);
-
-    DUMP_EXPRESSION(difference);
+    // SimplifyExpression(&expr, &error, out_sream);
 
     fclose(fp);
 }

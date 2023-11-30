@@ -1,4 +1,10 @@
 #include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 #include "expr_input_and_output.h"
 #include "common/input_and_output.h"
@@ -10,16 +16,16 @@
 
 static const char* NIL = "nil";
 
-static Node*       NodesInfixRead(expr_t* expr, Storage* info, Node* current_node, error_t* error);
-static Node*       NodesPrefixRead(expr_t* expr, Storage* info, Node* current_node, error_t* error);
-static void        ReadNodeData(expr_t* expr, Storage* info, NodeType* type, NodeValue* value,  error_t* error);
+static Node*       NodesInfixRead(expr_t* expr, LinesStorage* info, Node* current_node, error_t* error);
+static Node*       NodesPrefixRead(expr_t* expr, LinesStorage* info, Node* current_node, error_t* error);
+static void        ReadNodeData(expr_t* expr, LinesStorage* info, NodeType* type, NodeValue* value,  error_t* error);
 
-static inline void DeleteClosingBracketFromWord(Storage* info, char* read);
-static char        CheckOpeningBracketInInput(Storage* info);
+static inline void DeleteClosingBracketFromWord(LinesStorage* info, char* read);
+static char        CheckOpeningBracketInInput(LinesStorage* info);
 
-static Node*       ReadNewInfixNode(expr_t* expr, Storage* info, Node* parent_node, error_t* error);
-static Node*       ReadNewPrefixNode(expr_t* expr, Storage* info, Node* parent_node, error_t* error);
-static bool        TryReadNumber(Storage* info, NodeType* type, NodeValue* value);
+static Node*       ReadNewInfixNode(expr_t* expr, LinesStorage* info, Node* parent_node, error_t* error);
+static Node*       ReadNewPrefixNode(expr_t* expr, LinesStorage* info, Node* parent_node, error_t* error);
+static bool        TryReadNumber(LinesStorage* info, NodeType* type, NodeValue* value);
 
 // ======================================================================
 // EXPRESSION OUTPUT
@@ -141,10 +147,9 @@ void PrintExpressionTree(FILE* fp, const expr_t* expr)
 void PrintExpressionTreeLatex(FILE* fp, const expr_t* expr)
 {
     assert(expr);
-    PrintPrankPhrase(fp);
-    fprintf(fp, "\n\n$");
+    fprintf(fp, "\\\\\n\n$");
     NodesLatexPrint(fp, expr, expr->root);
-    fprintf(fp, "$\n\n");
+    fprintf(fp, ".$\n\n\\\\");
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -332,6 +337,12 @@ static void PutOpeningBracket(FILE* fp, bool need_bracket, bool figure_bracket)
 {
     if (!need_bracket)  return;
 
+    if (need_bracket && figure_bracket)
+    {
+        fprintf(fp, "{(");
+        return;
+    }
+
     if (figure_bracket)
         fputc('{', fp);
     else
@@ -343,6 +354,12 @@ static void PutOpeningBracket(FILE* fp, bool need_bracket, bool figure_bracket)
 static void PutClosingBracket(FILE* fp, bool need_bracket, bool figure_bracket)
 {
     if (!need_bracket)  return;
+
+    if (need_bracket && figure_bracket)
+    {
+        fprintf(fp, ")}");
+        return;
+    }
 
     if (figure_bracket)
         fputc('}', fp);
@@ -375,7 +392,7 @@ static bool CheckBracketsNeededInEquation(const Node* node)
 
 //-----------------------------------------------------------------------------------------------------
 
-static inline void DeleteClosingBracketFromWord(Storage* info, char* read)
+static inline void DeleteClosingBracketFromWord(LinesStorage* info, char* read)
 {
     assert(read);
 
@@ -408,7 +425,7 @@ static int GetOperationPriority(const Operators sign)
 
 //-----------------------------------------------------------------------------------------------------
 
-void ExpressionInfixRead(Storage* info, expr_t* expr, error_t* error)
+void ExpressionInfixRead(LinesStorage* info, expr_t* expr, error_t* error)
 {
     assert(expr);
     assert(info);
@@ -434,7 +451,7 @@ void ExpressionInfixRead(Storage* info, expr_t* expr, error_t* error)
 
 //-----------------------------------------------------------------------------------------------------
 
-void ExpressionPrefixRead(Storage* info, expr_t* expr, error_t* error)
+void ExpressionPrefixRead(LinesStorage* info, expr_t* expr, error_t* error)
 {
     assert(expr);
     assert(info);
@@ -460,7 +477,7 @@ void ExpressionPrefixRead(Storage* info, expr_t* expr, error_t* error)
 
 //-----------------------------------------------------------------------------------------------------
 
-static char CheckOpeningBracketInInput(Storage* info)
+static char CheckOpeningBracketInInput(LinesStorage* info)
 {
     SkipBufSpaces(info);
     char opening_bracket_check = Bufgetc(info);
@@ -470,7 +487,7 @@ static char CheckOpeningBracketInInput(Storage* info)
 
 //-----------------------------------------------------------------------------------------------------
 
-static Node* NodesInfixRead(expr_t* expr, Storage* info, Node* current_node, error_t* error)
+static Node* NodesInfixRead(expr_t* expr, LinesStorage* info, Node* current_node, error_t* error)
 {
     assert(error);
     assert(expr);
@@ -505,7 +522,7 @@ static Node* NodesInfixRead(expr_t* expr, Storage* info, Node* current_node, err
 
 //-----------------------------------------------------------------------------------------------------
 
-static Node* NodesPrefixRead(expr_t* expr, Storage* info, Node* current_node, error_t* error)
+static Node* NodesPrefixRead(expr_t* expr, LinesStorage* info, Node* current_node, error_t* error)
 {
     assert(error);
     assert(expr);
@@ -544,7 +561,7 @@ static Node* NodesPrefixRead(expr_t* expr, Storage* info, Node* current_node, er
 
 //-----------------------------------------------------------------------------------------------------
 
-static Node* ReadNewInfixNode(expr_t* expr, Storage* info, Node* parent_node, error_t* error)
+static Node* ReadNewInfixNode(expr_t* expr, LinesStorage* info, Node* parent_node, error_t* error)
 {
     assert(expr);
     assert(info);
@@ -582,7 +599,7 @@ static Node* ReadNewInfixNode(expr_t* expr, Storage* info, Node* parent_node, er
 
 //-----------------------------------------------------------------------------------------------------
 
-static Node* ReadNewPrefixNode(expr_t* expr, Storage* info, Node* parent_node, error_t* error)
+static Node* ReadNewPrefixNode(expr_t* expr, LinesStorage* info, Node* parent_node, error_t* error)
 {
     assert(expr);
     assert(info);
@@ -613,7 +630,7 @@ static Node* ReadNewPrefixNode(expr_t* expr, Storage* info, Node* parent_node, e
 
 //-----------------------------------------------------------------------------------------------------
 
-static void ReadNodeData(expr_t* expr, Storage* info, NodeType* type, NodeValue* value,  error_t* error)
+static void ReadNodeData(expr_t* expr, LinesStorage* info, NodeType* type, NodeValue* value,  error_t* error)
 {
     assert(error);
     assert(type);
@@ -656,7 +673,7 @@ static void ReadNodeData(expr_t* expr, Storage* info, NodeType* type, NodeValue*
 
 //-----------------------------------------------------------------------------------------------------
 
-static bool TryReadNumber(Storage* info, NodeType* type, NodeValue* value)
+static bool TryReadNumber(LinesStorage* info, NodeType* type, NodeValue* value)
 {
     double number = 0;
     int is_number = BufScanfDouble(info, &number);
@@ -849,6 +866,8 @@ void DrawExprGraphic(const expr_t* expr)
     fprintf(gnuf, "\" lc rgb \"red\"\n");
 
     EndGraphic(gnuf);
+    fclose(gnuf);
+
     MakeImgFromGpl(TMP_GNU_FILE, img_name);
 
     free(img_name);
@@ -881,6 +900,8 @@ void DrawTwoExprGraphics(const expr_t* expr_1, const expr_t* expr_2)
     fprintf(gnuf, "\" lc rgb \"blue\"\n");
 
     EndGraphic(gnuf);
+    fclose(gnuf);
+
     MakeImgFromGpl(TMP_GNU_FILE, img_name);
 
     free(img_name);
