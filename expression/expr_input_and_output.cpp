@@ -567,9 +567,9 @@ static Node* ReadNewInfixNode(expr_t* expr, LinesStorage* info, Node* parent_nod
     assert(info);
     assert(error);
 
-    Node* node = MakeNode(PZN_TYPE, ZERO_VALUE, nullptr, nullptr, nullptr);
+    Node* node = MakeNode(NodeType::POISON, ZERO_VALUE, nullptr, nullptr, nullptr);
 
-    NodeType type = PZN_TYPE;
+    NodeType type = NodeType::POISON;
     NodeValue val = ZERO_VALUE;
 
     Node* left = NodesInfixRead(expr, info, node, error);
@@ -605,9 +605,9 @@ static Node* ReadNewPrefixNode(expr_t* expr, LinesStorage* info, Node* parent_no
     assert(info);
     assert(error);
 
-    Node* node = MakeNode(PZN_TYPE, ZERO_VALUE, nullptr, nullptr, nullptr);
+    Node* node = MakeNode(NodeType::POISON, ZERO_VALUE, nullptr, nullptr, nullptr);
 
-    NodeType type = PZN_TYPE;
+    NodeType type = NodeType::POISON;
     NodeValue val = ZERO_VALUE;
 
     ReadNodeData(expr, info, &type, &val, error);

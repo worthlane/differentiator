@@ -66,15 +66,7 @@
                             left  = nullptr;                                                                                \
                         }                                                                                                   \
                                                                                                                             \
-                        Node* new_node = MakeNode(NodeType::OPERATOR, {.opt = Operators::name}, left, right, nullptr);      \
-                                                                                                                            \
-                        if (right != nullptr)                                                                               \
-                            right->parent = new_node;                                                                       \
-                                                                                                                            \
-                        if (left != nullptr)                                                                                \
-                            left->parent = new_node;                                                                        \
-                                                                                                                            \
-                        return new_node;                                                                                    \
+                        return MakeNode(NodeType::OPERATOR, {.opt = Operators::name}, left, right, nullptr);                \
                     }
 
 #include "operations.h"
@@ -670,18 +662,7 @@ static Node* Copy(Node* node)
 {
     if (!node) return nullptr;
 
-    Node* left  = Copy(node->left);
-    Node* right = Copy(node->right);
-
-    Node* new_node = MakeNode(node->type, node->value, left, right, nullptr);
-
-    if (right != nullptr)
-        right->parent = new_node;
-
-    if (left != nullptr)
-        left->parent = new_node;
-
-    return new_node;
+    return MakeNode(node->type, node->value, Copy(node->left), Copy(node->right), nullptr);
 }
 
 //------------------------------------------------------------------

@@ -164,6 +164,12 @@ Node* MakeNode(const NodeType type, const NodeValue value,
     node->left   = left;
     node->right  = right;
 
+    if (right != nullptr)
+        right->parent = node;
+
+    if (left != nullptr)
+        left->parent = node;
+
     return node;
 }
 
@@ -197,7 +203,7 @@ void LinkNodesWithParents(Node* node)
 
 ExpressionErrors ExpressionCtor(expr_t* expr, error_t* error)
 {
-    Node* root = MakeNode(PZN_TYPE, ZERO_VALUE, nullptr, nullptr, nullptr);
+    Node* root = MakeNode(NodeType::POISON, ZERO_VALUE, nullptr, nullptr, nullptr);
 
     variable_t* vars = MakeVariablesArray(error, MAX_VARIABLES_AMT);
     RETURN_IF_EXPRESSION_ERROR((ExpressionErrors) error->code);
@@ -213,7 +219,7 @@ ExpressionErrors ExpressionCtor(expr_t* expr, error_t* error)
 
 ExpressionErrors ExpressionCtor(expr_t* expr, const size_t size, error_t* error)
 {
-    Node* root = MakeNode(PZN_TYPE, ZERO_VALUE, nullptr, nullptr, nullptr);
+    Node* root = MakeNode(NodeType::POISON, ZERO_VALUE, nullptr, nullptr, nullptr);
 
     variable_t* vars = MakeVariablesArray(error, size);
     RETURN_IF_EXPRESSION_ERROR((ExpressionErrors) error->code);

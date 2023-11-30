@@ -108,7 +108,6 @@ enum class NodeType
 
     POISON,
 };
-static const NodeType PZN_TYPE  = NodeType::POISON;
 
 union NodeValue
 {
