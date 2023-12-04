@@ -10,6 +10,8 @@
 #include "common/input_and_output.h"
 #include "visual.h"
 
+static size_t GetTreeDepth(const Node* root);
+
 // ======================================================================
 // EXPRESSION INPUT
 // ======================================================================
@@ -33,7 +35,8 @@ static bool        TryReadNumber(LinesStorage* info, NodeType* type, NodeValue* 
 
 static void        TextExpressionDump(FILE* fp, const expr_t* expr);
 static void        NodesInfixPrint(FILE* fp, const expr_t* expr, const Node* node);
-static void        NodesLatexPrint(FILE* fp, const expr_t* expr, const Node* node);
+static void        NodesLatexPrint(FILE* fp, const expr_t* expr, const Node* node,
+                                   const int depth = -9999, SubtreeNames* names = nullptr);
 static void        NodesGnuplotPrint(FILE* fp, const expr_t* expr, const Node* node);
 static void        PrintNodeDataType(FILE* fp, const NodeType type);
 
@@ -42,13 +45,19 @@ static void        PutOpeningBracket(FILE* fp, bool need_bracket, bool figure_br
 static void        PutClosingBracket(FILE* fp, bool need_bracket, bool figure_bracket);
 
 static void        LatexPrintTwoArgumentsOperation(FILE* fp, const expr_t* expr, const Node* node,
-                                                   const char* opt, LatexOperationTypes type,
-                                                   bool need_brackets, bool figure_brackets);
+                                                  const char* opt, LatexOperationTypes type,
+                                                  bool need_left_brackets, bool left_is_figure,
+                                                  bool need_right_brackets, bool right_is_figure,
+                                                  const int depth = -9999, SubtreeNames* names = nullptr);
 static void        LatexPrintOneArgumentOperation(FILE* fp, const expr_t* expr, const Node* node,
                                                   const char* opt, LatexOperationTypes type,
-                                                  bool need_brackets, bool figure_brackets);
+                                                  bool need_left_brackets, bool left_is_figure,
+                                                  bool need_right_brackets, bool right_is_figure,
+                                                  const int depth = -9999, SubtreeNames* names = nullptr);
 
 static void        PrintOperationForPlot(FILE* fp, const expr_t* expr, const Node* node, const char* opt);
+
+static void PrintRenamedTree(FILE* fp, const expr_t* expr, const Node* node, const int order);
 
 // ======================================================================
 // GRAPH BUILDING
@@ -70,9 +79,30 @@ static int         GetOperationPriority(const Operators sign);
 
 //-----------------------------------------------------------------------------------------------------
 
-void PrintNodeData(FILE* fp, const expr_t* expr, const Node* node)
+static size_t GetTreeDepth(const Node* root)
 {
-    assert(node);
+    if (!root)
+        return 0;
+
+    size_t left  = GetTreeDepth(root->left);
+    size_t right = GetTreeDepth(root->right);
+
+    return ((left > right) ? left : right) + 1;
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+void PrintNodeData(FILE* fp, const expr_t* expr, const Node* node, SubtreeNames* names)
+{
+    if (!node)
+        return;
+
+    if (names != nullptr && node->type == NodeType::OPERATOR)
+    {
+        fprintf(fp, "%c_{%d}", names->free_spot + INIT_SUBTREE_NAME, names->order);
+        names->subtrees[names->free_spot++] = node;
+        return;
+    }
 
     switch(node->type)
     {
@@ -134,7 +164,7 @@ static void PrintNodeDataType(FILE* fp, const NodeType type)
 
 //-----------------------------------------------------------------------------------------------------
 
-void PrintExpressionTree(FILE* fp, const expr_t* expr)
+void PrintInfixExpression(FILE* fp, const expr_t* expr)
 {
     assert(expr);
 
@@ -144,12 +174,75 @@ void PrintExpressionTree(FILE* fp, const expr_t* expr)
 
 //-----------------------------------------------------------------------------------------------------
 
-void PrintExpressionTreeLatex(FILE* fp, const expr_t* expr)
+void PrintTaylorLatex(FILE* fp, const expr_t* expr, const size_t order, const int val)
 {
     assert(expr);
-    fprintf(fp, "\\\\\n\n$");
+
+    fprintf(fp, "Taylor series is: \n$");
     NodesLatexPrint(fp, expr, expr->root);
-    fprintf(fp, ".$\n\n\\\\");
+    fprintf(fp, "+ o((x - %d)^{%d}).", val, order);
+    fprintf(fp, "$\\\\\n");
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+static void PrintExpressionLatex(FILE* fp, const expr_t* expr, const Node* node, const int order)
+{
+    assert(expr);
+
+    if (!node)
+        return;
+
+    if (GetTreeDepth(node) > MAX_OUTPUT_TREE_DEPTH)
+    {
+        PrintRenamedTree(fp, expr, node, order);
+    }
+    else
+    {
+        NodesLatexPrint(fp, expr, node);
+        fprintf(fp, ".\\\\\n");
+    }
+
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+void PrintExpression(FILE* fp, const expr_t* expr)
+{
+    assert(expr);
+
+    fprintf(fp, "\n\n\\begin{multline}\n");
+    PrintExpressionLatex(fp, expr, expr->root, 1);
+    fprintf(fp, "\\end{multline}\n\n");
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+static void PrintRenamedTree(FILE* fp, const expr_t* expr, const Node* node, const int order)
+{
+    assert(expr);
+    assert(node);
+
+    if (!node)
+        return;
+
+    int new_order = order + 1;
+
+    SubtreeNames names = {.subtrees  = {},
+                          .free_spot = 0,
+                          .order = order};
+
+    NodesLatexPrint(fp, expr, node, 1, &names);
+    if (node != nullptr)
+        fprintf(fp, ".\\\\\n");
+
+    int i = 0;
+    while (names.subtrees[i] != nullptr)
+    {
+        fprintf(fp, "%c_{%d} = ", i + INIT_SUBTREE_NAME, names.order);
+        PrintExpressionLatex(fp, expr, names.subtrees[i], new_order++);
+        i++;
+    }
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -181,10 +274,11 @@ void NodesInfixPrint(FILE* fp, const expr_t* expr, const Node* node)
 
 //-----------------------------------------------------------------------------------------------------
 
-#define DEF_OP(name, symb, priority, arg_amt, action, gnu_symb, type, tex_symb, need_brackets, figure_brackets, ...)      \
+#define DEF_OP(name, symb, priority, arg_amt, action, gnu_symb, type, tex_symb,    \
+               need_left_brackets, left_is_figure, need_right_brackets, right_is_figure, ...)      \
     case (Operators::name):                                                                                     \
     {                                                                                                           \
-            PrintOperationForPlot(fp, expr, node, gnu_symb);                                     \
+            PrintOperationForPlot(fp, expr, node, gnu_symb);                                                    \
         break;                                                                                                  \
     }
 
@@ -235,23 +329,35 @@ static void PrintOperationForPlot(FILE* fp, const expr_t* expr, const Node* node
 
 //-----------------------------------------------------------------------------------------------------
 
-#define DEF_OP(name, symb, priority, arg_amt, action, gnu_symb, type, tex_symb, need_brackets, figure_brackets, ...)      \
-    case (Operators::name):                                                                                     \
-    {                                                                                                           \
-        if (arg_amt == 2)                                                                                       \
-            LatexPrintTwoArgumentsOperation(fp, expr, node, tex_symb, type, need_brackets, figure_brackets);    \
-        if (arg_amt == 1)                                                                                       \
-            LatexPrintOneArgumentOperation(fp, expr, node, tex_symb, type, need_brackets, figure_brackets);     \
-        break;                                                                                                  \
+#define DEF_OP(name, symb, priority, arg_amt, action, gnu_symb, type, tex_symb,                                                 \
+               need_left_brackets, left_is_figure, need_right_brackets, right_is_figure, ...)                                   \
+    case (Operators::name):                                                                                                     \
+    {                                                                                                                           \
+        if (arg_amt == 2)                                                                                                       \
+            LatexPrintTwoArgumentsOperation(fp, expr, node, tex_symb, type, need_left_brackets, left_is_figure,                 \
+                                                                            need_right_brackets, right_is_figure,               \
+                                                                            depth, names);                                      \
+        if (arg_amt == 1)                                                                                                       \
+            LatexPrintOneArgumentOperation(fp, expr, node, tex_symb, type, need_left_brackets, left_is_figure,                 \
+                                                                           need_right_brackets, right_is_figure,               \
+                                                                           depth, names);                                      \
+        return;                                                                                                                 \
     }
 
-static void NodesLatexPrint(FILE* fp, const expr_t* expr, const Node* node)
+static void NodesLatexPrint(FILE* fp, const expr_t* expr, const Node* node,
+                            const int depth, SubtreeNames* names)
 {
     if (!node) { return; }
 
     if (node->left == nullptr && node->right == nullptr)
     {
         PrintNodeData(fp, expr, node);
+        return;
+    }
+
+    if (depth >= MAX_OUTPUT_TREE_DEPTH)
+    {
+        PrintNodeData(fp, expr, node, names);
         return;
     }
 
@@ -266,6 +372,7 @@ static void NodesLatexPrint(FILE* fp, const expr_t* expr, const Node* node)
         }
     }
 
+    fprintf(fp, "$$$");
 }
 
 #undef DEF_OP
@@ -274,28 +381,30 @@ static void NodesLatexPrint(FILE* fp, const expr_t* expr, const Node* node)
 
 static void LatexPrintTwoArgumentsOperation(FILE* fp, const expr_t* expr, const Node* node,
                                             const char* opt, LatexOperationTypes type,
-                                            bool need_brackets, bool figure_brackets)
+                                            bool need_left_brackets, bool left_is_figure,
+                                            bool need_right_brackets, bool right_is_figure,
+                                            const int depth, SubtreeNames* names)
 {
     assert(opt);
     assert(expr);
     assert(node);
 
-    bool need_brackets_on_the_left  = (need_brackets || CheckBracketsNeededInEquation(node->left));
-    bool need_brackets_on_the_right = (need_brackets || CheckBracketsNeededInEquation(node->right));
+    bool need_brackets_on_the_left  = (need_left_brackets  || CheckBracketsNeededInEquation(node->left));
+    bool need_brackets_on_the_right = (need_right_brackets || CheckBracketsNeededInEquation(node->right));
 
     if (type == LatexOperationTypes::PREFIX)
         fprintf(fp, "%s", opt);
 
-    PutOpeningBracket(fp, need_brackets_on_the_left, figure_brackets);
-    NodesLatexPrint(fp, expr, node->left);
-    PutClosingBracket(fp, need_brackets_on_the_left, figure_brackets);
+    PutOpeningBracket(fp, need_brackets_on_the_left, left_is_figure);
+    NodesLatexPrint(fp, expr, node->left, depth + 1, names);
+    PutClosingBracket(fp, need_brackets_on_the_left, left_is_figure);
 
     if (type == LatexOperationTypes::INFIX)
         fprintf(fp, " %s ", opt);
 
-    PutOpeningBracket(fp, need_brackets_on_the_right, figure_brackets);
-    NodesLatexPrint(fp, expr, node->right);
-    PutClosingBracket(fp, need_brackets_on_the_right, figure_brackets);
+    PutOpeningBracket(fp, need_brackets_on_the_right, right_is_figure);
+    NodesLatexPrint(fp, expr, node->right, depth + 1, names);
+    PutClosingBracket(fp, need_brackets_on_the_right, right_is_figure);
 
     if (type == LatexOperationTypes::POSTFIX)
         fprintf(fp, "%s", opt);
@@ -304,29 +413,31 @@ static void LatexPrintTwoArgumentsOperation(FILE* fp, const expr_t* expr, const 
 //-----------------------------------------------------------------------------------------------------
 
 static void LatexPrintOneArgumentOperation(FILE* fp, const expr_t* expr, const Node* node,
-                                            const char* opt, LatexOperationTypes type,
-                                            bool need_brackets, bool figure_brackets)
+                                           const char* opt, LatexOperationTypes type,
+                                           bool need_left_brackets, bool left_is_figure,
+                                           bool need_right_brackets, bool right_is_figure,
+                                           const int depth, SubtreeNames* names)
 {
     assert(opt);
     assert(expr);
     assert(node);
 
-    bool need_brackets_on_the_left  = (need_brackets || CheckBracketsNeededInEquation(node->left));
-    bool need_brackets_on_the_right = (need_brackets || CheckBracketsNeededInEquation(node->right));
+    bool need_brackets_on_the_left  = (need_left_brackets  || CheckBracketsNeededInEquation(node->left));
+    bool need_brackets_on_the_right = (need_right_brackets || CheckBracketsNeededInEquation(node->right));
 
     if (type == LatexOperationTypes::PREFIX)
     {
         fprintf(fp, "%s", opt);
-        PutOpeningBracket(fp, need_brackets_on_the_right, figure_brackets);
-        NodesLatexPrint(fp, expr, node->right);
-        PutClosingBracket(fp, need_brackets_on_the_right, figure_brackets);
+        PutOpeningBracket(fp, need_brackets_on_the_right, left_is_figure);
+        NodesLatexPrint(fp, expr, node->right, depth + 1, names);
+        PutClosingBracket(fp, need_brackets_on_the_right, left_is_figure);
     }
 
     if (type == LatexOperationTypes::POSTFIX)
     {
-        PutOpeningBracket(fp, need_brackets_on_the_left, figure_brackets);
-        NodesLatexPrint(fp, expr, node->left);
-        PutClosingBracket(fp, need_brackets_on_the_left, figure_brackets);
+        PutOpeningBracket(fp, need_brackets_on_the_left, right_is_figure);
+        NodesLatexPrint(fp, expr, node->left, depth + 1, names);
+        PutClosingBracket(fp, need_brackets_on_the_left, right_is_figure);
         fprintf(fp, "%s", opt);
     }
 }
@@ -336,12 +447,6 @@ static void LatexPrintOneArgumentOperation(FILE* fp, const expr_t* expr, const N
 static void PutOpeningBracket(FILE* fp, bool need_bracket, bool figure_bracket)
 {
     if (!need_bracket)  return;
-
-    if (need_bracket && figure_bracket)
-    {
-        fprintf(fp, "{(");
-        return;
-    }
 
     if (figure_bracket)
         fputc('{', fp);
@@ -354,12 +459,6 @@ static void PutOpeningBracket(FILE* fp, bool need_bracket, bool figure_bracket)
 static void PutClosingBracket(FILE* fp, bool need_bracket, bool figure_bracket)
 {
     if (!need_bracket)  return;
-
-    if (need_bracket && figure_bracket)
-    {
-        fprintf(fp, ")}");
-        return;
-    }
 
     if (figure_bracket)
         fputc('}', fp);
@@ -385,6 +484,9 @@ static bool CheckBracketsNeededInEquation(const Node* node)
     int parent_priority = GetOperationPriority(node->parent->value.opt);
 
     if (kid_priority < parent_priority)
+        return true;
+
+    if (kid_priority == parent_priority && node->value.opt == Operators::DEG)
         return true;
 
     return false;
@@ -760,7 +862,7 @@ static void TextExpressionDump(FILE* fp, const expr_t* expr)
 
     fprintf(fp, "<b>DUMPING EXPRESSION</b>\n");
 
-    PrintExpressionTree(fp, expr);
+    PrintInfixExpression(fp, expr);
 
     fprintf(fp, "</pre>");
 }
@@ -847,7 +949,7 @@ static inline void FillNodeColor(FILE* fp, const Node* node)
 
 //------------------------------------------------------------------
 
-void DrawExprGraphic(const expr_t* expr)
+void DrawExprGraphic(FILE* fp, const expr_t* expr)
 {
     assert(expr);
 
@@ -868,14 +970,14 @@ void DrawExprGraphic(const expr_t* expr)
     EndGraphic(gnuf);
     fclose(gnuf);
 
-    MakeImgFromGpl(TMP_GNU_FILE, img_name);
+    MakeImgFromGpl(fp, TMP_GNU_FILE, img_name);
 
     free(img_name);
 }
 
 //------------------------------------------------------------------
 
-void DrawTwoExprGraphics(const expr_t* expr_1, const expr_t* expr_2)
+void DrawTwoExprGraphics(FILE* fp, const expr_t* expr_1, const expr_t* expr_2)
 {
     assert(expr_1);
     assert(expr_2);
@@ -902,7 +1004,7 @@ void DrawTwoExprGraphics(const expr_t* expr_1, const expr_t* expr_2)
     EndGraphic(gnuf);
     fclose(gnuf);
 
-    MakeImgFromGpl(TMP_GNU_FILE, img_name);
+    MakeImgFromGpl(fp, TMP_GNU_FILE, img_name);
 
     free(img_name);
 }

@@ -5,6 +5,7 @@
 #include "expression/visual.h"
 #include "expression/expr_input_and_output.h"
 #include "common/input_and_output.h"
+#include "tex.h"
 
 #ifdef PRINT_EXPR
 #undef PRINT_EXPR
@@ -12,7 +13,7 @@
 #define PRINT_EXPR(fp, expr)                              \
         if (fp != nullptr)                                      \
         {                                                   \
-            PrintExpressionTreeLatex(fp, expr);                 \
+            PrintExpression(fp, expr);                 \
         }
 
 #ifdef PRINT_PRANK
@@ -30,7 +31,7 @@
 #define PRINT(fp, string)                                       \
         if (fp != nullptr)                                      \
         {                                                   \
-            fprintf(fp, string);                                 \
+            fprintf(fp, "\n" string);                                 \
         }
 
 // ======================================================================
@@ -46,6 +47,16 @@
 #undef CPY
 #endif
 #define CPY(node) Copy(node)
+
+#ifdef L
+#undef L
+#endif
+#define L(node)   node->left
+
+#ifdef R
+#undef R
+#endif
+#define R(node)   node->right
 
 #ifdef NUM
 #undef NUM
@@ -81,7 +92,7 @@ static const double EPSILON  = 1e-9;
 
 static double CalculateExpressionSubtree(const expr_t* expr, Node* root, error_t* error);
 
-static double OperatorAction(const double number_1, const double number_2,
+static double OperatorAction(const double NUMBER_1, const double NUMBER_2,
                                       const Operators operation, error_t* error);
 
 static bool AreEqual(const double a, const double b);
@@ -107,17 +118,17 @@ static void RemoveNeutralDEG(expr_t* expr, Node* node, int* transform_cnt, error
 // DIFFERENTIATING
 // ======================================================================
 
-static Node* Copy(Node* node);
+static Node* Copy(const Node* node);
 
-static Node*   Differentiate(Node* node, const int id, error_t* error);
-static expr_t* DifferentiateExpression(expr_t* expr, const int var_id, error_t* error, FILE* fp);
+static Node*   Differentiate(const Node* node, const int id, error_t* error);
+static expr_t* DifferentiateExpression(const expr_t* expr, const int var_id, error_t* error, FILE* fp);
 
-static expr_t* MakeExpressionWithSameVar(expr_t* expr, const char* var, int* id, error_t* error);
-static expr_t* MakeExpressionWithSameVar(expr_t* expr, error_t* error);
+static expr_t* MakeExpressionWithSameVars(const expr_t* expr, const char* var, int* id, error_t* error);
+static expr_t* MakeExpressionWithSameVars(const expr_t* expr, error_t* error);
 
 static inline int Factorial(const int n);
 
-static void    CalculateLinearParams(expr_t* expr, const int var_id, double* tang, double* b,
+static void    CalculateLinearParams(const expr_t* expr, const int var_id, double* tang, double* b,
                                      error_t* error, FILE* fp = nullptr);
 
 
@@ -139,7 +150,7 @@ static bool AreEqual(const double a, const double b)
             case (Operators::name):                             \
                 return action;                                  \
 
-static double OperatorAction(const double number_1, const double number_2,
+static double OperatorAction(const double NUMBER_1, const double NUMBER_2,
                                       const Operators operation, error_t* error)
 {
     switch (operation)
@@ -581,10 +592,10 @@ void SimplifyExpression(expr_t* expr, error_t* error, FILE* fp)
     assert(expr);
     assert(error);
 
-    PRINT_EXPR(fp, expr);
     PRINT(fp, "Lets simplify this expression.\n");
 
     int cnt = 1;
+    int simple_flag = false;
     while (cnt != 0)
     {
         cnt = 0;
@@ -596,6 +607,7 @@ void SimplifyExpression(expr_t* expr, error_t* error, FILE* fp)
 
         if (cnt != 0)
         {
+            simple_flag = true;
             PRINT_PRANK(fp);
             PRINT_EXPR(fp, expr);
         }
@@ -606,15 +618,20 @@ void SimplifyExpression(expr_t* expr, error_t* error, FILE* fp)
 
         if (cnt != save_cnt)
         {
+            simple_flag = true;
             PRINT_PRANK(fp);
             PRINT_EXPR(fp, expr);
         }
     }
+
+    if (!simple_flag)
+        PRINT(fp, "Oopsie, our expression is already too awesome.\n");
 }
 
 //------------------------------------------------------------------
 
-#define DEF_OP(name, symb, priority, arg_amt, action, gnu_symb, type, tex_symb, need_brackets, figure_brackets, diff, ...)   \
+#define DEF_OP(name, symb, priority, arg_amt, action, gnu_symb, type, tex_symb,                       \
+               need_left_brackets, left_is_figure, need_right_brackets, right_is_figure, diff, ...)   \
         case (Operators::name):                                                                                     \
         {                                                                                                           \
             assert(node);                                                                                           \
@@ -624,7 +641,7 @@ void SimplifyExpression(expr_t* expr, error_t* error, FILE* fp)
         }                                                                                                           \
 
 
-static Node* Differentiate(Node* node, const int id, error_t* error)
+static Node* Differentiate(const Node* node, const int id, error_t* error)
 {
     assert(error);
 
@@ -658,7 +675,7 @@ static Node* Differentiate(Node* node, const int id, error_t* error)
 
 //------------------------------------------------------------------
 
-static Node* Copy(Node* node)
+static Node* Copy(const Node* node)
 {
     if (!node) return nullptr;
 
@@ -667,7 +684,7 @@ static Node* Copy(Node* node)
 
 //------------------------------------------------------------------
 
-static expr_t* MakeExpressionWithSameVar(expr_t* expr, const char* var, int* id, error_t* error)
+static expr_t* MakeExpressionWithSameVars(const expr_t* expr, const char* var, int* id, error_t* error)
 {
     assert(expr);
     assert(var);
@@ -676,7 +693,7 @@ static expr_t* MakeExpressionWithSameVar(expr_t* expr, const char* var, int* id,
 
     int var_id = FindVariableAmongSaved(expr->vars, var);
 
-    expr_t* d_expr = MakeExpression(error);
+    expr_t* d_expr = MakeExpression(error, expr->max_vars_amt);
     if (error->code != (int) ExpressionErrors::NONE)
         return nullptr;
 
@@ -691,7 +708,7 @@ static expr_t* MakeExpressionWithSameVar(expr_t* expr, const char* var, int* id,
 
 //:::::::::::::::::::::::::::::::::::::::::::::::::::::
 
-static expr_t* MakeExpressionWithSameVar(expr_t* expr, error_t* error)
+static expr_t* MakeExpressionWithSameVars(const expr_t* expr, error_t* error)
 {
     assert(expr);
     assert(error);
@@ -709,17 +726,16 @@ static expr_t* MakeExpressionWithSameVar(expr_t* expr, error_t* error)
 
 //------------------------------------------------------------------
 
-expr_t* DifferentiateExpression(expr_t* expr, const char* var, error_t* error, FILE* fp)
+expr_t* DifferentiateExpression(const expr_t* expr, const char* var, error_t* error, FILE* fp)
 {
     assert(var);
     assert(expr);
     assert(error);
 
-    PRINT_EXPR(fp, expr);
     PRINT(fp, "LET'S DIFFERENTIATE THIS!!!\n");
 
     int     var_id = NO_VARIABLE;
-    expr_t* d_expr = MakeExpressionWithSameVar(expr, var, &var_id, error);
+    expr_t* d_expr = MakeExpressionWithSameVars(expr, var, &var_id, error);
     if (error->code != (int) ExpressionErrors::NONE)
         return nullptr;
 
@@ -730,6 +746,7 @@ expr_t* DifferentiateExpression(expr_t* expr, const char* var, error_t* error, F
     d_expr->root = root;
 
     PRINT_PRANK(fp);
+    PRINT_EXPR(fp, d_expr);
 
     SimplifyExpression(d_expr, error, fp);
 
@@ -738,14 +755,14 @@ expr_t* DifferentiateExpression(expr_t* expr, const char* var, error_t* error, F
 
 //:::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
-static expr_t* DifferentiateExpression(expr_t* expr, const int var_id, error_t* error, FILE* fp)
+static expr_t* DifferentiateExpression(const expr_t* expr, const int var_id, error_t* error, FILE* fp)
 {
     assert(expr);
     assert(error);
 
-    PRINT(fp, "After differentiation:\n");
+    PRINT(fp, "Starting differentiation... \n");
 
-    expr_t* d_expr  = MakeExpressionWithSameVar(expr, error);
+    expr_t* d_expr  = MakeExpressionWithSameVars(expr, error);
     if (error->code != (int) ExpressionErrors::NONE)
         return nullptr;
 
@@ -755,6 +772,7 @@ static expr_t* DifferentiateExpression(expr_t* expr, const int var_id, error_t* 
 
     d_expr->root = root;
 
+    PRINT_PRANK(fp);
     PRINT_EXPR(fp, d_expr);
 
     SimplifyExpression(d_expr, error, fp);
@@ -792,7 +810,7 @@ expr_t* TaylorSeries(expr_t* expr, const int n, const char* var, const double va
     PRINT_EXPR(fp, expr);
 
     int     var_id    = NO_VARIABLE;
-    expr_t* new_expr = MakeExpressionWithSameVar(expr, var, &var_id, error);
+    expr_t* new_expr = MakeExpressionWithSameVars(expr, var, &var_id, error);
     if (error->code != (int) ExpressionErrors::NONE)
         return nullptr;
 
@@ -871,17 +889,17 @@ expr_t* GetExpressionsDifference(expr_t* expr_1, expr_t* expr_2, error_t* error,
 
 //------------------------------------------------------------------
 
-expr_t* GetTangent(expr_t* expr, const char* var, const double val, error_t* error, FILE* fp)
+expr_t* GetTangent(const expr_t* expr, const char* var, const double val, error_t* error, FILE* fp)
 {
     assert(var);
     assert(expr);
     assert(error);
 
     PRINT_EXPR(fp, expr);
-    PRINT(fp, "Lets find tangent!\n");
+    PRINT(fp, "Lets find the tangent!\n");
 
     int         var_id   = NO_VARIABLE;
-    expr_t*     new_expr = MakeExpressionWithSameVar(expr, var, &var_id, error);
+    expr_t*     new_expr = MakeExpressionWithSameVars(expr, var, &var_id, error);
     if (error->code != (int) ExpressionErrors::NONE)
         return nullptr;
 
@@ -911,7 +929,7 @@ expr_t* GetTangent(expr_t* expr, const char* var, const double val, error_t* err
 
 //------------------------------------------------------------------
 
-static void CalculateLinearParams(expr_t* expr, const int var_id, double* tang, double* b,
+static void CalculateLinearParams(const expr_t* expr, const int var_id, double* tang, double* b,
                                   error_t* error, FILE* fp)
 {
     assert(tang);
@@ -922,7 +940,8 @@ static void CalculateLinearParams(expr_t* expr, const int var_id, double* tang, 
     expr_t* d_expr   = DifferentiateExpression(expr, var_id, error, fp);
     if (error->code != (int) ExpressionErrors::NONE) return;
 
-    PrintExpressionTree(stdout, d_expr);
+    PrintInfixExpression(stdout, expr);
+    PrintInfixExpression(stdout, d_expr);
 
     double  tan      = CalculateExpressionSubtree(d_expr, d_expr->root, error);
     if (error->code != (int) ExpressionErrors::NONE) return;
@@ -930,10 +949,10 @@ static void CalculateLinearParams(expr_t* expr, const int var_id, double* tang, 
     double  func_val = CalculateExpressionSubtree(expr, expr->root, error);
     if (error->code != (int) ExpressionErrors::NONE) return;
 
+    printf("%lg %lg\n", tan, func_val);
+
     *b    = func_val - (tan * expr->vars[var_id].value);
     *tang = tan;
-
-    printf("%lg %lg\n", *b, *tang);
 
     ExpressionDtor(d_expr);
 

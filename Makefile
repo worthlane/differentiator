@@ -20,7 +20,7 @@ CXXFLAGS += -I $(HOME)
 IMAGE = img
 BUILD_DIR = build/bin
 OBJECTS_DIR = build
-SOURCES = main.cpp calculation.cpp
+SOURCES = main.cpp calculation.cpp tex.cpp
 EXPRESSION_SOURCES = expression.cpp visual.cpp expr_input_and_output.cpp
 EXPRESSION_DIR = expression
 COMMON_SOURCES = logs.cpp errors.cpp input_and_output.cpp file_read.cpp
@@ -52,7 +52,7 @@ doxybuild:
 	$(DOXYBUILD)
 
 clean:
-	rm -rf $(EXECUTABLE) $(OBJECTS_DIR)/*.o *.html *.log $(IMAGE)/*.png *.dot
+	rm -rf $(EXECUTABLE) $(OBJECTS_DIR)/*.o *.html *.log $(IMAGE)/*.png *.dot *.gpl
 
 makedirs:
 	mkdir -p $(BUILD_DIR)

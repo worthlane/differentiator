@@ -20,6 +20,18 @@
                                                                     __FILE__, __LINE__);                \
                                                 }                                                       \
                                             } while(0)
+
+#ifdef BREAK_IF_ERROR
+#undef BREAK_IF_ERROR
+
+#endif
+#define BREAK_IF_ERROR(error)                do                                                          \
+                                            {                                                           \
+                                                if ((error)->code != (int) ERRORS::NONE)                \
+                                                {                                                       \
+                                                    return;                                             \
+                                                }                                                       \
+                                            } while(0)
 #ifdef RETURN_IF_ERROR
 #undef RETURN_IF_ERROR
 

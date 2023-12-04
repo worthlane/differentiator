@@ -28,6 +28,6 @@ static const char*  TMP_GNU_FILE = "tmp.gpl";
 void EndGraphic(FILE* gnuf);
 void StartGraphic(FILE* gnuf, const char* img_name);
 
-void MakeImgFromGpl(const char* gpl_file, const char* img_name);
+void MakeImgFromGpl(FILE* fp, const char* gpl_file, const char* img_name);
 
 #endif

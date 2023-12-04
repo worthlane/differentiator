@@ -66,9 +66,10 @@ enum class Operators
 #undef DEF_OP
 
 #define DEF_OP(name, symb, ...)     \
-    static const char* name = symb; \
+    static const char* name = symb;
 
 #include "operations.h"
+
 
 #undef DEF_OP
 
@@ -170,9 +171,10 @@ typedef struct Expression expr_t;
 ExpressionErrors    ExpressionCtor(expr_t* expr, error_t* error);
 ExpressionErrors    ExpressionCtor(expr_t* expr, const size_t size, error_t* error);
 expr_t*             MakeExpression(error_t* error);
+expr_t*             MakeExpression(error_t* error, const size_t size);
 void                ExpressionDtor(expr_t* expr);
 
-ExpressionErrors ExpressionVerify(const expr_t* expr, error_t* error);
+ExpressionErrors    ExpressionVerify(const expr_t* expr, error_t* error);
 
 #ifdef CHECK_EXPRESSION
 #undef CHECK_EXPRESSION

@@ -58,6 +58,7 @@ void StartGraphic(FILE* gnuf, const char* img_name)
                   "set output '%s'\n"
                   "set xlabel \"X\"\n"
                   "set ylabel \"Y\"\n"
+                  "set yrange[-2:2]\n"
                   "set grid\n", img_name);
 }
 
@@ -76,7 +77,7 @@ char* GenImgName()
 
 //---------------------------------------------------------------------------------------
 
-void MakeImgFromGpl(const char* gpl_file, const char* img_name)
+void MakeImgFromGpl(FILE* fp, const char* gpl_file, const char* img_name)
 {
     assert(gpl_file);
     assert(img_name);
@@ -86,6 +87,7 @@ void MakeImgFromGpl(const char* gpl_file, const char* img_name)
     system(gnu_command);
 
     PrintLog("\n<img src=\"%s\"><br>\n", img_name);
+    fprintf(fp, "\n\\includegraphics[scale = 0.5]{%s}\n", img_name);
 
 }
 

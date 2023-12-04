@@ -3,6 +3,17 @@
 
 #include "expression.h"
 
+static const int    MAX_OUTPUT_TREE_DEPTH = 6;
+static const char   INIT_SUBTREE_NAME     = 'A';
+static const char   MAX_SUBTREES_AMT      = 'Z' - 'A';
+
+struct SubtreeNames
+{
+    const Node* subtrees[MAX_SUBTREES_AMT];
+    int         free_spot;
+    int         order;
+};
+
 // ======================================================================
 // EXPRESSION OPERATORS
 // ======================================================================
@@ -28,14 +39,17 @@ int   NodeDump(FILE* fp, const void* dumping_node, const char* func, const char*
                                 LogDump(NodeDump, (node), __func__, __FILE__, __LINE__);    \
                             } while(0)
 
-void  PrintNodeData(FILE* fp, const expr_t* expr, const Node* node);
+void  PrintNodeData(FILE* fp, const expr_t* expr, const Node* node,
+                    SubtreeNames* names = nullptr);
 
 // ======================================================================
 // EXPRESSION STRUCT
 // ======================================================================
 
-void    PrintExpressionTree(FILE* fp, const expr_t* expr);
-void    PrintExpressionTreeLatex(FILE* fp, const expr_t* expr);
+void    PrintExpression(FILE* fp, const expr_t* expr);
+
+void    PrintInfixExpression(FILE* fp, const expr_t* expr);
+void    PrintTaylorLatex(FILE* fp, const expr_t* expr, const size_t order, const int val);
 void    ExpressionInfixRead(LinesStorage* info, expr_t* expr, error_t* error);
 void    ExpressionPrefixRead(LinesStorage* info, expr_t* expr, error_t* error);
 int     ExpressionDump(FILE* fp, const void* nodes, const char* func, const char* file, const int line);
@@ -52,8 +66,8 @@ int     ExpressionDump(FILE* fp, const void* nodes, const char* func, const char
 // GRAPHICS
 // ======================================================================
 
-void DrawExprGraphic(const expr_t* expr);
-void DrawTwoExprGraphics(const expr_t* expr_1, const expr_t* expr_2);       // TODO несколько в одной
+void DrawExprGraphic(FILE* fp, const expr_t* expr);
+void DrawTwoExprGraphics(FILE* fp, const expr_t* expr_1, const expr_t* expr_2);       // TODO несколько в одной
 
 
 

@@ -2,6 +2,8 @@
 #include <string.h>
 #include <ctype.h>
 #include <time.h>
+#include <stdlib.h>
+#include <stdio.h>
 
 #include "expression.h"
 #include "visual.h"
@@ -56,11 +58,10 @@ void DestructVariablesArray(variable_t* variables, const size_t size)
 
     for (size_t i = 0; i < size; i++)
     {
-        if (variables[i].isfree == false)
+        if (!variables[i].isfree)
             free(variables[i].variable_name);
-
-        variables[i].isfree = true;
-        variables[i].value  = 0;
+        variables[i].isfree        = true;
+        variables[i].value         = 0;
     }
 }
 
@@ -74,15 +75,20 @@ void CopyVariablesArray(const variable_t* vars, variable_t* dest, error_t* error
 
     for (size_t i = 0; i < MAX_VARIABLES_AMT; i++)
     {
-        char* name = strndup(vars[i].variable_name, MAX_VARIABLE_LEN);
-        if (!name)
+        char* name = "";
+
+        if (!vars[i].isfree)
         {
-            error->code = (int) ExpressionErrors::ALLOCATE_MEMORY;
-            error->data = "COPYING VARS";
-            return;
+            name = strndup(vars[i].variable_name, MAX_VARIABLE_LEN);
+            if (!name)
+            {
+                error->code = (int) ExpressionErrors::ALLOCATE_MEMORY;
+                error->data = "COPYING VARS";
+                return;
+            }
         }
 
-        dest[i].variable_name = vars[i].variable_name;
+        dest[i].variable_name = name;
         dest[i].isfree        = vars[i].isfree;
         dest[i].value         = vars[i].value;
     }
@@ -233,6 +239,27 @@ ExpressionErrors ExpressionCtor(expr_t* expr, const size_t size, error_t* error)
 
 //-----------------------------------------------------------------------------------------------------
 
+expr_t* MakeExpression(error_t* error, const size_t size)
+{
+    assert(error);
+
+    expr_t* expr = (expr_t*) calloc(1, sizeof(expr_t));
+    if (expr == nullptr)
+    {
+        error->code = (int) ExpressionErrors::ALLOCATE_MEMORY;
+        error->data = "EXPRESSION STRUCT";
+        return nullptr;
+    }
+
+    ExpressionCtor(expr, size, error);
+    if (error->code != (int) ExpressionErrors::NONE)
+        return nullptr;
+
+    return expr;
+}
+
+//:::::::::::::::::::::::::::::::::::::::::::
+
 expr_t* MakeExpression(error_t* error)
 {
     assert(error);
@@ -271,11 +298,8 @@ void DestructNodes(Node* root)
 {
     if (!root) return;
 
-    if (root->left != nullptr)
-        DestructNodes(root->left);
-
-    if (root->right != nullptr)
-        DestructNodes(root->right);
+    DestructNodes(root->left);
+    DestructNodes(root->right);
 
     NodeDtor(root);
 }
