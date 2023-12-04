@@ -58,15 +58,35 @@
 #endif
 #define R(node)   node->right
 
-#ifdef NUM
-#undef NUM
+#ifdef TYPE
+#undef TYPE
 #endif
-#define NUM(num)  MakeNode(NodeType::NUMBER, {.val = num}, nullptr, nullptr, nullptr)
+#define TYPE(node)   node->type
+
+#ifdef VAL
+#undef VAL
+#endif
+#define VAL(node)   node->value.val
 
 #ifdef VAR
 #undef VAR
 #endif
-#define VAR(id)   MakeNode(NodeType::VARIABLE, {.var = id}, nullptr, nullptr, nullptr)
+#define VAR(node)   node->value.var
+
+#ifdef OPT
+#undef OPT
+#endif
+#define OPT(node)   node->value.opt
+
+#ifdef _NUM
+#undef _NUM
+#endif
+#define _NUM(num)  MakeNode(NodeType::NUMBER, {.val = num}, nullptr, nullptr, nullptr)
+
+#ifdef _VAR
+#undef _VAR
+#endif
+#define _VAR(id)   MakeNode(NodeType::VARIABLE, {.var = id}, nullptr, nullptr, nullptr)
 
 #define DEF_OP(name, symb, priority, arg_amt, ...)                                                                          \
                     static inline Node* _##name(Node* left, Node* right = nullptr)                                          \
@@ -175,8 +195,8 @@ static double CalculateExpressionSubtree(const expr_t* expr, Node* node, error_t
 
     if (node->left == nullptr && node->right == nullptr)
     {
-        if (node->type == NodeType::NUMBER)             return node->value.val;
-        else if (node->type == NodeType::VARIABLE)      return expr->vars[node->value.var].value;
+        if (TYPE(node) == NodeType::NUMBER)             return VAL(node);
+        else if (TYPE(node) == NodeType::VARIABLE)      return expr->vars[VAR(node)].value;
         else
         {
             error->code = (int) ExpressionErrors::INVALID_EXPRESSION_FORMAT;
@@ -187,7 +207,7 @@ static double CalculateExpressionSubtree(const expr_t* expr, Node* node, error_t
     double left_result  = CalculateExpressionSubtree(expr, node->left, error);
     double right_result = CalculateExpressionSubtree(expr, node->right, error);
 
-    if (node->type != NodeType::OPERATOR)
+    if (TYPE(node) != NodeType::OPERATOR)
     {
         error->code = (int) ExpressionErrors::INVALID_EXPRESSION_FORMAT;
         return 0;
@@ -235,7 +255,7 @@ static void SimplifyExpressionConstants(expr_t* expr, Node* node, int* transform
 
     if (node->left == nullptr)
     {
-        if (node->right->type == NodeType::NUMBER)
+        if (TYPE(node->right) == NodeType::NUMBER)
         {
             UniteExpressionSubtree(expr, node, error);
             *transform_cnt++;
@@ -246,7 +266,7 @@ static void SimplifyExpressionConstants(expr_t* expr, Node* node, int* transform
 
     if (node->right == nullptr)
     {
-        if (node->left->type == NodeType::NUMBER)
+        if (TYPE(node->left) == NodeType::NUMBER)
         {
             UniteExpressionSubtree(expr, node, error);
             *transform_cnt++;
@@ -255,7 +275,7 @@ static void SimplifyExpressionConstants(expr_t* expr, Node* node, int* transform
         return;
     }
 
-    if (node->left->type == NodeType::NUMBER && node->right->type == NodeType::NUMBER)
+    if (TYPE(node->left) == NodeType::NUMBER && TYPE(node->right) == NodeType::NUMBER)
     {
         UniteExpressionSubtree(expr, node, error);
         *transform_cnt++;
@@ -277,10 +297,7 @@ static void UniteExpressionSubtree(expr_t* expr, Node* node, error_t* error)
     DestructNodes(node->left);
     DestructNodes(node->right);
 
-    node->left      = nullptr;
-    node->right     = nullptr;
-    node->type      = NodeType::NUMBER;
-    node->value.val = num;
+    FillNode(node, nullptr, nullptr, node->parent, NodeType::NUMBER, {.val = num});
 }
 
 //------------------------------------------------------------------
@@ -303,7 +320,7 @@ static void SimplifyExpressionNeutrals(expr_t* expr, Node* node, int* transform_
     if (error->code != (int) ExpressionErrors::NONE)
         return;
 
-    if (node->type != NodeType::OPERATOR)
+    if (TYPE(node) != NodeType::OPERATOR)
     {
         error->code = (int) ExpressionErrors::INVALID_EXPRESSION_FORMAT;
         return;
@@ -387,7 +404,7 @@ static void RemoveNeutralADD(expr_t* expr, Node* node, int* transform_cnt, error
         return;
     }
 
-    if (node->left->type == NodeType::NUMBER && AreEqual(node->left->value.val, 0))
+    if (TYPE(node->left) == NodeType::NUMBER && AreEqual(node->left->value.val, 0))
     {
         (*transform_cnt)++;
 
@@ -397,7 +414,7 @@ static void RemoveNeutralADD(expr_t* expr, Node* node, int* transform_cnt, error
         return;
     }
 
-    if (node->right->type == NodeType::NUMBER && AreEqual(node->right->value.val, 0))
+    if (TYPE(node->right) == NodeType::NUMBER && AreEqual(node->right->value.val, 0))
     {
         (*transform_cnt)++;
 
@@ -421,7 +438,7 @@ static void RemoveNeutralSUB(expr_t* expr, Node* node, int* transform_cnt, error
         return;
     }
 
-    if (node->right->type == NodeType::NUMBER && AreEqual(node->right->value.val, 0))
+    if (TYPE(node->right) == NodeType::NUMBER && AreEqual(node->right->value.val, 0))
     {
         (*transform_cnt)++;
 
@@ -432,8 +449,8 @@ static void RemoveNeutralSUB(expr_t* expr, Node* node, int* transform_cnt, error
     }
 
 
-    if ((node->right->type      == NodeType::VARIABLE   &&
-         node->left->type       == NodeType::VARIABLE)  &&
+    if ((TYPE(node->right)      == NodeType::VARIABLE   &&
+         TYPE(node->left)       == NodeType::VARIABLE)  &&
          node->right->value.var == node->left->value.var)
     {
         (*transform_cnt)++;
@@ -441,10 +458,7 @@ static void RemoveNeutralSUB(expr_t* expr, Node* node, int* transform_cnt, error
         DestructNodes(node->right);
         DestructNodes(node->left);
 
-        node->type      = NodeType::NUMBER;
-        node->value.val = 0;
-        node->left      = nullptr;
-        node->right     = nullptr;
+        FillNode(node, nullptr, nullptr, node->parent, NodeType::NUMBER, {.val = 0});
     }
 }
 
@@ -463,7 +477,7 @@ static void RemoveNeutralDIV(expr_t* expr, Node* node, int* transform_cnt, error
         return;
     }
 
-    if (node->right->type == NodeType::NUMBER && AreEqual(node->right->value.val, 1))
+    if (TYPE(node->right) == NodeType::NUMBER && AreEqual(node->right->value.val, 1))
     {
         (*transform_cnt)++;
 
@@ -489,7 +503,7 @@ static void RemoveNeutralMUL(expr_t* expr, Node* node, int* transform_cnt, error
         return;
     }
 
-    if (node->left->type == NodeType::NUMBER)
+    if (TYPE(node->left) == NodeType::NUMBER)
     {
         if (AreEqual(node->left->value.val, 1))
         {
@@ -509,7 +523,7 @@ static void RemoveNeutralMUL(expr_t* expr, Node* node, int* transform_cnt, error
         return;
     }
 
-    if (node->right->type == NodeType::NUMBER)
+    if (TYPE(node->right) == NodeType::NUMBER)
     {
         if (AreEqual(node->right->value.val, 1))
         {
@@ -543,7 +557,7 @@ static void RemoveNeutralDEG(expr_t* expr, Node* node, int* transform_cnt, error
         return;
     }
 
-    if (node->left->type == NodeType::NUMBER)
+    if (TYPE(node->left) == NodeType::NUMBER)
     {
         if (AreEqual(node->left->value.val, 1))
         {
@@ -561,7 +575,7 @@ static void RemoveNeutralDEG(expr_t* expr, Node* node, int* transform_cnt, error
         return;
     }
 
-    if (node->right->type == NodeType::NUMBER)
+    if (TYPE(node->right) == NodeType::NUMBER)
     {
         if (AreEqual(node->right->value.val, 1))
         {
@@ -647,18 +661,18 @@ static Node* Differentiate(const Node* node, const int id, error_t* error)
 
     if (!node)  return nullptr;
 
-    if (node->type == NodeType::POISON)
+    if (TYPE(node) == NodeType::POISON)
     {
         error->code = (int) ExpressionErrors::INVALID_EXPRESSION_FORMAT;
         return nullptr;
     }
 
-    if (node->type == NodeType::NUMBER ||
-       (node->type == NodeType::VARIABLE && node->value.var != id))
-        return NUM(0);
+    if (TYPE(node) == NodeType::NUMBER ||
+       (TYPE(node) == NodeType::VARIABLE && node->value.var != id))
+        return _NUM(0);
 
-    if (node->type == NodeType::VARIABLE)
-        return NUM(1);
+    if (TYPE(node) == NodeType::VARIABLE)
+        return _NUM(1);
 
     switch (node->value.opt)
     {
@@ -819,14 +833,14 @@ expr_t* TaylorSeries(expr_t* expr, const int n, const char* var, const double va
 
     expr_t* diff_expr     = expr;
     double  calc          = CalculateExpressionSubtree(diff_expr, diff_expr->root, error);
-    Node*   taylor_series = NUM(0);
+    Node*   taylor_series = _NUM(0);
 
     for (int i = 0; i <= n; i++)
     {
         taylor_series = _ADD(taylor_series,
-                             _MUL(_DIV(NUM(calc), NUM((double) Factorial(i))),
-                                  _DEG(_SUB(VAR(var_id), NUM(expr->vars[var_id].value)),
-                                       NUM((double) i))));
+                             _MUL(_DIV(_NUM(calc), _NUM((double) Factorial(i))),
+                                  _DEG(_SUB(_VAR(var_id), _NUM(expr->vars[var_id].value)),
+                                       _NUM((double) i))));
 
         PRINT(fp, "We need to differentiate this:\n");
         PRINT_EXPR(fp, diff_expr);
@@ -915,7 +929,7 @@ expr_t* GetTangent(const expr_t* expr, const char* var, const double val, error_
     if (error->code != (int) ExpressionErrors::NONE)
         return nullptr;
 
-    Node* root = _ADD(NUM(b), _MUL(VAR(var_id), NUM(tang)));
+    Node* root = _ADD(_NUM(b), _MUL(_VAR(var_id), _NUM(tang)));
 
     new_expr->root = root;
 

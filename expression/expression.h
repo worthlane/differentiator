@@ -139,6 +139,7 @@ Node* MakeNode(const NodeType type, const NodeValue value,
                Node* left, Node* right, Node* parent);
 void  NodeDtor(Node* node);
 void  DestructNodes(Node* root);
+void  FillNode(Node* node, Node* left, Node* right, Node* parent, const NodeType type, const NodeValue value);
 
 ExpressionErrors NodeVerify(const Node* node, error_t* error);
 

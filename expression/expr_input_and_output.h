@@ -6,6 +6,7 @@
 static const int    MAX_OUTPUT_TREE_DEPTH = 6;
 static const char   INIT_SUBTREE_NAME     = 'A';
 static const char   MAX_SUBTREES_AMT      = 'Z' - 'A';
+static const int    MAX_LINES_ON_PAGE     = 25;
 
 struct SubtreeNames
 {

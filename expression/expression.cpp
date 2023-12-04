@@ -35,6 +35,19 @@ variable_t* MakeVariablesArray(error_t* error, const size_t size)
     return vars;
 }
 
+//-----------------------------------------------------------------------------------------------------
+
+void FillNode(Node* node, Node* left, Node* right, Node* parent, const NodeType type, const NodeValue value)
+{
+    assert(node);
+
+    node->left   = left;
+    node->right  = right;
+    node->parent = parent;
+    node->type   = type;
+    node->value  = value;
+}
+
 
 //------------------------------------------------------------------
 

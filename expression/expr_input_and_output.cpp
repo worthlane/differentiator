@@ -10,6 +10,10 @@
 #include "common/input_and_output.h"
 #include "visual.h"
 
+static const int CHANGING_TREE_DEPTH = 3;
+
+static int       global_lines_cnt = 10;
+
 static size_t GetTreeDepth(const Node* root);
 
 // ======================================================================
@@ -57,7 +61,10 @@ static void        LatexPrintOneArgumentOperation(FILE* fp, const expr_t* expr, 
 
 static void        PrintOperationForPlot(FILE* fp, const expr_t* expr, const Node* node, const char* opt);
 
-static void PrintRenamedTree(FILE* fp, const expr_t* expr, const Node* node, const int order);
+static void        PrintExpressionLatex(FILE* fp, const expr_t* expr, const Node* node, const int order);
+static void        PrintRenamedTree(FILE* fp, const expr_t* expr, const Node* node, const int order);
+
+static inline void EndMultlineLine(FILE* fp);
 
 // ======================================================================
 // GRAPH BUILDING
@@ -186,6 +193,22 @@ void PrintTaylorLatex(FILE* fp, const expr_t* expr, const size_t order, const in
 
 //-----------------------------------------------------------------------------------------------------
 
+static inline void EndMultlineLine(FILE* fp)
+{
+    fprintf(fp, ".\\\\\n");
+    global_lines_cnt++;
+
+    if (global_lines_cnt >= MAX_LINES_ON_PAGE)
+    {
+        fprintf(fp, "\\end{multline}\n"
+                    "\\begin{multline}\n"
+                    "\\\\\n");
+        global_lines_cnt = 0;
+    }
+}
+
+//-----------------------------------------------------------------------------------------------------
+
 static void PrintExpressionLatex(FILE* fp, const expr_t* expr, const Node* node, const int order)
 {
     assert(expr);
@@ -200,7 +223,7 @@ static void PrintExpressionLatex(FILE* fp, const expr_t* expr, const Node* node,
     else
     {
         NodesLatexPrint(fp, expr, node);
-        fprintf(fp, ".\\\\\n");
+        EndMultlineLine(fp);
     }
 
 }
@@ -211,7 +234,10 @@ void PrintExpression(FILE* fp, const expr_t* expr)
 {
     assert(expr);
 
-    fprintf(fp, "\n\n\\begin{multline}\n");
+    global_lines_cnt = 0;
+
+    fprintf(fp, "\n\n\\begin{multline}\n"
+                "\\\\\n");
     PrintExpressionLatex(fp, expr, expr->root, 1);
     fprintf(fp, "\\end{multline}\n\n");
 }
@@ -230,11 +256,11 @@ static void PrintRenamedTree(FILE* fp, const expr_t* expr, const Node* node, con
 
     SubtreeNames names = {.subtrees  = {},
                           .free_spot = 0,
-                          .order = order};
+                          .order     = order};
 
     NodesLatexPrint(fp, expr, node, 1, &names);
     if (node != nullptr)
-        fprintf(fp, ".\\\\\n");
+        EndMultlineLine(fp);
 
     int i = 0;
     while (names.subtrees[i] != nullptr)
@@ -355,7 +381,7 @@ static void NodesLatexPrint(FILE* fp, const expr_t* expr, const Node* node,
         return;
     }
 
-    if (depth >= MAX_OUTPUT_TREE_DEPTH)
+    if (depth >= CHANGING_TREE_DEPTH)
     {
         PrintNodeData(fp, expr, node, names);
         return;

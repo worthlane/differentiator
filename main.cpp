@@ -32,7 +32,7 @@ int main(const int argc, const char* argv[])
     UnrealTaylor(argc, argv, out_stream, &error);
     EXIT_IF_EXPRESSION_ERROR(&error);
 
-    // EasyX3Differentiation(argc, argv, out_stream, &error);
+    EasyX3Differentiation(argc, argv, out_stream, &error);
     EXIT_IF_EXPRESSION_ERROR(&error);
 
     EndTexFile(out_stream);

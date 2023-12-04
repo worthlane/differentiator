@@ -52,7 +52,7 @@ void PrintPrankPhrase(FILE* fp)
                                     "Let's not bother with obvious proof that this is",
                                     "I would justify this transition, but the article will be more useful if you do it yourself",
                                     "At that very lecture you missed, it was proved that this is equal to",
-                                    "A fitness trainer from Simferopol\\cite{SJ} threatens to beat you if you don't continue the transformation",
+                                    "A fitness trainer from Simferopol\\cite{SJ} threatens to beat you if you won't continue the transformation",
                                     "This explanation is available only for premium readers of this article (4862 8784 4592 1552)",
                                     "Zhirinovsky suggested \\cite{Zhirinovsky} to do this simplification",
                                     "Are you really still reading this?",
