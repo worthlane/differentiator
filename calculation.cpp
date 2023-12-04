@@ -213,7 +213,7 @@ static double CalculateExpressionSubtree(const expr_t* expr, Node* node, error_t
         return 0;
     }
 
-    double result = OperatorAction(left_result, right_result, node->value.opt, error);
+    double result = OperatorAction(left_result, right_result, OPT(node), error);
 
     if (error->code == (int) ExpressionErrors::NONE)
         return result;
@@ -326,7 +326,7 @@ static void SimplifyExpressionNeutrals(expr_t* expr, Node* node, int* transform_
         return;
     }
 
-    switch (node->value.opt)
+    switch (OPT(node))
     {
         case (Operators::ADD):
             RemoveNeutralADD(expr, node, transform_cnt, error, fp);
@@ -404,7 +404,7 @@ static void RemoveNeutralADD(expr_t* expr, Node* node, int* transform_cnt, error
         return;
     }
 
-    if (TYPE(node->left) == NodeType::NUMBER && AreEqual(node->left->value.val, 0))
+    if (TYPE(node->left) == NodeType::NUMBER && AreEqual(VAL(node->left), 0))
     {
         (*transform_cnt)++;
 
@@ -414,7 +414,7 @@ static void RemoveNeutralADD(expr_t* expr, Node* node, int* transform_cnt, error
         return;
     }
 
-    if (TYPE(node->right) == NodeType::NUMBER && AreEqual(node->right->value.val, 0))
+    if (TYPE(node->right) == NodeType::NUMBER && AreEqual(VAL(node->right), 0))
     {
         (*transform_cnt)++;
 
@@ -438,7 +438,7 @@ static void RemoveNeutralSUB(expr_t* expr, Node* node, int* transform_cnt, error
         return;
     }
 
-    if (TYPE(node->right) == NodeType::NUMBER && AreEqual(node->right->value.val, 0))
+    if (TYPE(node->right) == NodeType::NUMBER && AreEqual(VAL(node->right), 0))
     {
         (*transform_cnt)++;
 
@@ -449,9 +449,9 @@ static void RemoveNeutralSUB(expr_t* expr, Node* node, int* transform_cnt, error
     }
 
 
-    if ((TYPE(node->right)      == NodeType::VARIABLE   &&
-         TYPE(node->left)       == NodeType::VARIABLE)  &&
-         node->right->value.var == node->left->value.var)
+    if ((TYPE(node->right) == NodeType::VARIABLE   &&
+         TYPE(node->left)  == NodeType::VARIABLE)  &&
+         VAR(node->right)  == VAR(node->left))
     {
         (*transform_cnt)++;
 
@@ -477,7 +477,7 @@ static void RemoveNeutralDIV(expr_t* expr, Node* node, int* transform_cnt, error
         return;
     }
 
-    if (TYPE(node->right) == NodeType::NUMBER && AreEqual(node->right->value.val, 1))
+    if (TYPE(node->right) == NodeType::NUMBER && AreEqual(VAL(node->right), 1))
     {
         (*transform_cnt)++;
 
@@ -505,14 +505,14 @@ static void RemoveNeutralMUL(expr_t* expr, Node* node, int* transform_cnt, error
 
     if (TYPE(node->left) == NodeType::NUMBER)
     {
-        if (AreEqual(node->left->value.val, 1))
+        if (AreEqual(VAL(node->left), 1))
         {
             (*transform_cnt)++;
 
             DestructNodes(node->left);
             ReplaceNodeWithItsKid(expr, node, NodeKid::RIGHT);
         }
-        else if (AreEqual(node->left->value.val, 0))
+        else if (AreEqual(VAL(node->left), 0))
         {
             (*transform_cnt)++;
 
@@ -525,14 +525,14 @@ static void RemoveNeutralMUL(expr_t* expr, Node* node, int* transform_cnt, error
 
     if (TYPE(node->right) == NodeType::NUMBER)
     {
-        if (AreEqual(node->right->value.val, 1))
+        if (AreEqual(VAL(node->right), 1))
         {
             (*transform_cnt)++;
 
             DestructNodes(node->right);
             ReplaceNodeWithItsKid(expr, node, NodeKid::LEFT);
         }
-        else if (AreEqual(node->right->value.val, 0))
+        else if (AreEqual(VAL(node->right), 0))
         {
             (*transform_cnt)++;
 
@@ -559,17 +559,14 @@ static void RemoveNeutralDEG(expr_t* expr, Node* node, int* transform_cnt, error
 
     if (TYPE(node->left) == NodeType::NUMBER)
     {
-        if (AreEqual(node->left->value.val, 1))
+        if (AreEqual(VAL(node->left), 1))
         {
             (*transform_cnt)++;
 
             DestructNodes(node->right);
             DestructNodes(node->left);
 
-            node->left      = nullptr;
-            node->right     = nullptr;
-            node->type      = NodeType::NUMBER;
-            node->value.val = 1;
+            FillNode(node, nullptr, nullptr, node->parent, NodeType::NUMBER, {.val = 1});
         }
 
         return;
@@ -577,24 +574,21 @@ static void RemoveNeutralDEG(expr_t* expr, Node* node, int* transform_cnt, error
 
     if (TYPE(node->right) == NodeType::NUMBER)
     {
-        if (AreEqual(node->right->value.val, 1))
+        if (AreEqual(VAL(node->right), 1))
         {
             (*transform_cnt)++;
 
             DestructNodes(node->right);
             ReplaceNodeWithItsKid(expr, node, NodeKid::LEFT);
         }
-        else if (AreEqual(node->right->value.val, 0))
+        else if (AreEqual(VAL(node->right), 0))
         {
             (*transform_cnt)++;
 
             DestructNodes(node->right);
             DestructNodes(node->left);
 
-            node->left      = nullptr;
-            node->right     = nullptr;
-            node->type      = NodeType::NUMBER;
-            node->value.val = 1;
+            FillNode(node, nullptr, nullptr, node->parent, NodeType::NUMBER, {.val = 1});
         }
     }
 }
@@ -668,13 +662,13 @@ static Node* Differentiate(const Node* node, const int id, error_t* error)
     }
 
     if (TYPE(node) == NodeType::NUMBER ||
-       (TYPE(node) == NodeType::VARIABLE && node->value.var != id))
+       (TYPE(node) == NodeType::VARIABLE && VAR(node) != id))
         return _NUM(0);
 
     if (TYPE(node) == NodeType::VARIABLE)
         return _NUM(1);
 
-    switch (node->value.opt)
+    switch (OPT(node))
     {
         #include "operations.h"
 
