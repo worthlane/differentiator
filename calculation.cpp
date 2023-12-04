@@ -806,7 +806,7 @@ expr_t* TaylorSeries(expr_t* expr, const int n, const char* var, const double va
     assert(expr);
     assert(error);
 
-    PRINT(fp, "Lets find taylor series of:\n");
+    PRINT(fp, "Lets find Taylor series of:\n");
     PRINT_EXPR(fp, expr);
 
     int     var_id    = NO_VARIABLE;
