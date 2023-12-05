@@ -7,6 +7,7 @@
 #include "common/file_read.h"
 #include "expression/expression.h"
 #include "expression/expr_input_and_output.h"
+#include "expression/expr_input.h"
 #include "calculation.h"
 #include "tex.h"
 
@@ -24,16 +25,25 @@ int main(const int argc, const char* argv[])
     EXIT_IF_ERROR(&error);
     FILE* out_stream = OpenOutputFile(output_file, &error);
     EXIT_IF_ERROR(&error);
+
     StartTexFile(out_stream);
 
-    UnrealTangent(argc, argv, out_stream, &error);
-    EXIT_IF_EXPRESSION_ERROR(&error);
+    expr_t  expr  = {};
+    ExpressionCtor(&expr, &error);
 
-    UnrealTaylor(argc, argv, out_stream, &error);
-    EXIT_IF_EXPRESSION_ERROR(&error);
+    const char* data_file = GetFileName(argc, argv, 2, "INPUT", &error);
+    EXIT_IF_ERROR(&error);
+    FILE* fp = OpenInputFile(data_file, &error);
+    EXIT_IF_ERROR(&error);
 
-    EasyX3Differentiation(argc, argv, out_stream, &error);
-    EXIT_IF_EXPRESSION_ERROR(&error);
+    LinesStorage info = {};
+    CreateTextStorage(&info, &error, data_file);
+
+    GetExpression(&info, &expr, &error);
+    EXIT_IF_ERROR(&error);
+
+    PrintInfixExpression(stdout, &expr);
+    DUMP_EXPRESSION(&expr);
 
     EndTexFile(out_stream);
     fclose(out_stream);

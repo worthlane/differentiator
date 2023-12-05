@@ -37,6 +37,24 @@ variable_t* MakeVariablesArray(error_t* error, const size_t size)
 
 //-----------------------------------------------------------------------------------------------------
 
+Node* ConnectNodes(Node* node, Node* left, Node* right)
+{
+    assert(node);
+
+    node->left  = left;
+    node->right = right;
+
+    if (left != nullptr)
+        left->parent = node;
+
+    if (right != nullptr)
+        right->parent = node;
+
+    return node;
+}
+
+//-----------------------------------------------------------------------------------------------------
+
 void FillNode(Node* node, Node* left, Node* right, Node* parent, const NodeType type, const NodeValue value)
 {
     assert(node);

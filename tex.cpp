@@ -8,8 +8,10 @@
 
 void StartTexFile(FILE* fp)
 {
-    fprintf(fp, "\\documentclass[12pt,a4paper]{extreport}\n"
-                "\\input{style}\n"
+    fprintf(fp, "\\documentclass[12pt,a4paper]{extreport}\n");
+
+
+    fprintf(fp, "\\input{style}\n"
                 "\\title{<<I fucking love science>>}\n"
                 "\\author{Maklakov Artyom B05-332}\n"
                 "\\usepackage[ sorting = none, style = science ]{biblatex}\n"

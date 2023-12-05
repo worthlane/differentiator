@@ -60,6 +60,11 @@ enum class Operators
 {
     #include "operations.h"
 
+    OPENING_BRACKET,
+    CLOSING_BRACKET,
+
+    END,
+
     UNKNOWN
 };
 
@@ -136,10 +141,11 @@ struct Node
 };
 
 Node* MakeNode(const NodeType type, const NodeValue value,
-               Node* left, Node* right, Node* parent);
+               Node* left = nullptr, Node* right = nullptr, Node* parent = nullptr);
 void  NodeDtor(Node* node);
 void  DestructNodes(Node* root);
 void  FillNode(Node* node, Node* left, Node* right, Node* parent, const NodeType type, const NodeValue value);
+Node* ConnectNodes(Node* node, Node* left, Node* right);
 
 ExpressionErrors NodeVerify(const Node* node, error_t* error);
 
