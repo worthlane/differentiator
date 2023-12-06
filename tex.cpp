@@ -8,10 +8,41 @@
 
 void StartTexFile(FILE* fp)
 {
-    fprintf(fp, "\\documentclass[12pt,a4paper]{extreport}\n");
+    /*fprintf(fp, "\\documentclass[12pt,a4paper]{extreport}\n"
+                "\\usepackage[left=15mm,right=15mm, top=15mm,bottom=15mm,bindingoffset=0cm]{geometry}\n"
+                "\\usepackage{indentfirst}\n"
+                "\\usepackage[labelsep=period]{caption}\n"
+                "\\usepackage{amssymb,amsmath,amsthm}\n"
+                "\\usepackage{fontspec}\n"
+                "\\usepackage{float}\n"
+                "\\usepackage{polyglossia}\n"
+                "\\setdefaultlanguage{english}\n"
+                "\\setotherlanguage{english}\n"
+                "\\usepackage{subcaption}\n"
+                "\\usepackage{graphicx}\n"
+                "\\graphicspath{img/}\n"
+                "\\DeclareGraphicsExtensions{.pdf,.png,.jpg}\n"
+                "\\usepackage{color}\n"
+                "\\usepackage[normalem]{ulem}\n"
+                "\\setlength{\\marginparwidth}{2cm}\n"
+                "\\newcommand{\\fix}[2]{{\\textcolor{red}{\\uwave{#1}}\\todo[fancyline]{#2}}}\n"
+                "\\newcommand{\\hl}[1]{{\\textcolor{red}{#1}}}\n"
+                "\\newcommand{\\cmd}[1]{{\\ttfamily{\textbackslash #1}}}\n"
+                "\\newcommand{\\vrb}[1]{\\PVerb{#1}}\n"
+                "\\newcommand{\\vrbb}[1]{\\texttt{\\textbackslash}\\PVerb{#1}}\n"
+                "\\usepackage[\n"
+                    "draft = false,\n"
+                    "unicode = true,\n"
+                    "colorlinks = true,\n"
+                    "allcolors = blue,\n"
+                    "hyperfootnotes = true\n"
+                "]{hyperref}\n"
+                "\\renewcommand \\thesection{\\Roman{section}}\n"
+                "\\renewcommand \\thesubsection{\\arabic{subsection}});\n");*/
 
 
-    fprintf(fp, "\\input{style}\n"
+    fprintf(fp, "\\documentclass[12pt,a4paper]{extreport}\n"
+                "\\input{style}\n"
                 "\\title{<<I fucking love science>>}\n"
                 "\\author{Maklakov Artyom B05-332}\n"
                 "\\usepackage[ sorting = none, style = science ]{biblatex}\n"

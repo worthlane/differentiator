@@ -31,6 +31,7 @@ static Node* GetE(Tokens* token, error_t* error);
 static Node* GetT(Tokens* token, error_t* error);
 static Node* GetP(Tokens* token, error_t* error);
 static Node* GetS(Tokens* tokens, error_t* error);
+static Node* GetDeg(Tokens* tokens, error_t* error);
 
 static Operators DefineOperator(const char* word);
 
@@ -51,6 +52,7 @@ void GetExpression(LinesStorage* info, expr_t* expr, error_t* error)
     BREAK_IF_ERROR(error);
 
     Node* root = GetG(&tokens, error);
+    BREAK_IF_ERROR(error);
 
     expr->root = root;
 }
@@ -257,6 +259,7 @@ static Node* GetG(Tokens* tokens, error_t* error)
     assert(error);
 
     Node* val = GetE(tokens, error);
+    if (error->code != (int) ExpressionErrors::NONE) return nullptr;
     SYN_ASSERT(TYPE(tokens->buf[tokens->ptr]) == NodeType::OPERATOR &&
                 OPT(tokens->buf[tokens->ptr]) == Operators::END);
 
@@ -270,12 +273,33 @@ static Node* GetN(Tokens* tokens, error_t* error)
     assert(tokens);
     assert(error);
 
-    Node* num = tokens->buf[tokens->ptr];
-    tokens->ptr++;
+    Node* val = nullptr;
 
-    SYN_ASSERT(TYPE(num) == NodeType::NUMBER || TYPE(num) == NodeType::VARIABLE);
+    if  (TYPE(tokens->buf[tokens->ptr]) == NodeType::OPERATOR &&
+         (OPT(tokens->buf[tokens->ptr]) == Operators::ADD ||
+          OPT(tokens->buf[tokens->ptr]) == Operators::SUB))
+    {
+        Node* op = tokens->buf[tokens->ptr];
+        tokens->ptr++;
 
-    return num;
+        Node* num = tokens->buf[tokens->ptr];
+        tokens->ptr++;
+
+        SYN_ASSERT(TYPE(num) == NodeType::NUMBER || TYPE(num) == NodeType::VARIABLE);
+
+        val = ConnectNodes(op, _NUM(0), num);
+    }
+    else
+    {
+        Node* num = tokens->buf[tokens->ptr];
+        tokens->ptr++;
+
+        SYN_ASSERT(TYPE(num) == NodeType::NUMBER || TYPE(num) == NodeType::VARIABLE);
+
+        val = num;
+    }
+
+    return val;
 }
 
 // -------------------------------------------------------------
@@ -291,7 +315,6 @@ static Node* GetE(Tokens* tokens, error_t* error)
              (OPT(tokens->buf[tokens->ptr]) == Operators::ADD ||
               OPT(tokens->buf[tokens->ptr]) == Operators::SUB))
     {
-
         Node* op = tokens->buf[tokens->ptr];
         tokens->ptr++;
         Node* val2 = GetT(tokens, error);
@@ -308,11 +331,32 @@ static Node* GetT(Tokens* tokens, error_t* error)
     assert(error);
     assert(tokens);
 
-    Node* val = GetS(tokens, error);
+    Node* val = GetDeg(tokens, error);
 
     while (TYPE(tokens->buf[tokens->ptr]) == NodeType::OPERATOR &&
            (OPT(tokens->buf[tokens->ptr]) == Operators::DIV ||
             OPT(tokens->buf[tokens->ptr]) == Operators::MUL))
+    {
+        Node* op = tokens->buf[tokens->ptr];
+        tokens->ptr++;
+        Node* val2 = GetDeg(tokens, error);
+
+        val = ConnectNodes(op, val, val2);
+    }
+    return val;
+}
+
+// -------------------------------------------------------------
+
+static Node* GetDeg(Tokens* tokens, error_t* error)
+{
+    assert(error);
+    assert(tokens);
+
+    Node* val = GetS(tokens, error);
+
+    while (TYPE(tokens->buf[tokens->ptr]) == NodeType::OPERATOR &&
+            OPT(tokens->buf[tokens->ptr]) == Operators::DEG)
     {
 
         Node* op = tokens->buf[tokens->ptr];
@@ -360,14 +404,12 @@ static Node* GetP(Tokens* tokens, error_t* error)
     if (TYPE(tokens->buf[tokens->ptr]) == NodeType::OPERATOR &&
          OPT(tokens->buf[tokens->ptr]) == Operators::OPENING_BRACKET)
     {
-        // NodeDtor(tokens->buf[tokens->ptr]);
-        // Node* val = _NUM(0);
         tokens->ptr++;
         Node* val = GetE(tokens, error);
 
         SYN_ASSERT(TYPE(tokens->buf[tokens->ptr]) == NodeType::OPERATOR &&
                     OPT(tokens->buf[tokens->ptr]) == Operators::CLOSING_BRACKET);
-        // NodeDtor(tokens->buf[tokens->ptr]);
+
         tokens->ptr++;
 
         return val;

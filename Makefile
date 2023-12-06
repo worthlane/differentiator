@@ -52,7 +52,7 @@ doxybuild:
 	$(DOXYBUILD)
 
 clean:
-	rm -rf $(EXECUTABLE) $(OBJECTS_DIR)/*.o *.html *.log $(IMAGE)/*.png *.dot *.gpl
+	rm -rf $(EXECUTABLE) $(OBJECTS_DIR)/*.o *.html *.log $(IMAGE)/*.png *.dot *.gpl *.log *.pdf *.aux
 
 makedirs:
 	mkdir -p $(BUILD_DIR)
