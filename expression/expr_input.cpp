@@ -1,43 +1,42 @@
+#include <stdio.h>
+#include <string.h>
+
 #include "expr_input.h"
 #include "expression.h"
 #include "operations.h"
 #include "dsl.h"
 #include "common/file_read.h"
+#include "common/errors.h"
 
 static const int MAX_STRING_LEN = 1000;
 
-static const char* s = NULL;
-static size_t      p = 0;
+#ifdef  SYN_ASSERT
+#undef  SYN_ASSERT
+#endif
+#define SYN_ASSERT(stat)                                                                            \
+        if (!(stat))                                                                                \
+        {                                                                                           \
+            error->code = (int) ExpressionErrors::INVALID_SYNTAX;                                   \
+            LOG_START(__func__, __FILE__, __LINE__);                                                \
+            PrintLog("SYNTAX ASSERT\"" #stat "\"<br>\n"                                             \
+                     "IN FUNCTION %s FROM FILE \"%s\"(%d)<br>\n", __func__, __FILE__, __LINE__);    \
+            LOG_END();                                                                              \
+            return nullptr;                                                                         \
+        }                                                                                           \
 
-static inline void syn_error();
 
-#define syn_assert(stat) assert(stat);
+static Node* GetG(Tokens* token, error_t* error);
+static Node* GetN(Tokens* token, error_t* error);
+static Node* GetE(Tokens* token, error_t* error);
+static Node* GetT(Tokens* token, error_t* error);
+static Node* GetP(Tokens* token, error_t* error);
+static Node* GetS(Tokens* tokens, error_t* error);
 
-static Node* GetG(Tokens* token);
-static Node* GetN(Tokens* token);
-static Node* GetE(Tokens* token);
-static Node* GetT(Tokens* token);
-static Node* GetP(Tokens* token);
+static Operators DefineOperator(const char* word);
 
-static Node* GetNumber(LinesStorage* info);
-static void  TokenizeInput(LinesStorage* info, Node* tokens[]);
-
-// ==============================================================
-
-static inline void syn_error()
-{
-    printf("SYNTAX ERROR\n");
-
-    abort();
-}
-
-/*static inline void syn_assert(bool statement)
-{
-    if (statement)
-        return;
-
-    syn_error();
-}*/
+static Node* GetNumber(LinesStorage* info, error_t* error);
+static Node* GetWord(LinesStorage* info, expr_t* expr, error_t* error);
+static void  TokenizeInput(LinesStorage* info, Node* tokens[], expr_t* expr, error_t* error);
 
 //-----------------------------------------------------------------------------------------------------
 
@@ -48,19 +47,21 @@ void GetExpression(LinesStorage* info, expr_t* expr, error_t* error)
 
     Tokens tokens = {.ptr = 0};
 
-    TokenizeInput(info, tokens.buf);
+    TokenizeInput(info, tokens.buf, expr, error);
+    BREAK_IF_ERROR(error);
 
-    Node* root = GetG(&tokens);
+    Node* root = GetG(&tokens, error);
 
     expr->root = root;
 }
 
 // -----------------------------------------------------------------------------------------------------
 
-static void TokenizeInput(LinesStorage* info, Node* tokens[])
+static void TokenizeInput(LinesStorage* info, Node* tokens[], expr_t* expr, error_t* error)
 {
     assert(info);
     assert(tokens);
+    assert(error);
 
     int i = 0;
 
@@ -90,6 +91,11 @@ static void TokenizeInput(LinesStorage* info, Node* tokens[])
                 tokens[i++] = _MUL();
                 break;
             }
+            case '^':
+            {
+                tokens[i++] = _DEG();
+                break;
+            }
             case '(':
             {
                 tokens[i++] = MakeNode(NodeType::OPERATOR, {.opt = Operators::OPENING_BRACKET});
@@ -105,39 +111,104 @@ static void TokenizeInput(LinesStorage* info, Node* tokens[])
                 tokens[i++] = MakeNode(NodeType::OPERATOR, {.opt = Operators::END});
                 break;
             }
-            case ' ':
             case '\n':
+            case ' ':
             case '\t':
             {
                 SkipBufSpaces(info);
                 break;
             }
-            case '0':
-            case '1':
-            case '2':
-            case '3':
-            case '4':
-            case '5':
-            case '6':
-            case '7':
-            case '8':
-            case '9':
+            case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
             {
                 Bufungetc(info);
-                Node* num = GetNumber(info);
+                Node* num = GetNumber(info, error);
                 if (num != nullptr)
                     tokens[i++] = num;
                 break;
             }
+            case 'a': case 'b': case 'c': case 'd': case 'e': case 'f': case 'g': case 'h': case 'i': case 'j':
+            case 'k': case 'l': case 'm': case 'n': case 'o': case 'p': case 'q': case 'r': case 's': case 't':
+            case 'u': case 'v': case 'w': case 'x': case 'y': case 'z':
+            case 'A': case 'B': case 'C': case 'D': case 'E': case 'F': case 'G': case 'H': case 'I': case 'J':
+            case 'K': case 'L': case 'M': case 'N': case 'O': case 'P': case 'Q': case 'R': case 'S': case 'T':
+            case 'U': case 'V': case 'W': case 'X': case 'Y': case 'Z': case '_':
+            {
+                Bufungetc(info);
+                Node* word = GetWord(info, expr, error);
+                if (word != nullptr)
+                    tokens[i++] = word;
+                break;
+            }
             default:
-                printf("$$$\n");
+                error->code = (int) ExpressionErrors::INVALID_SYNTAX;
         }
+
+        BREAK_IF_ERROR(error);
     }
 }
 
+//-----------------------------------------------------------------------------------------------------
+
+static Node* GetWord(LinesStorage* info, expr_t* expr, error_t* error)
+{
+    assert(expr);
+    assert(info);
+    assert(error);
+
+    char buffer[MAX_STRING_LEN] = "";
+    int i = 0;
+
+    int ch = Bufgetc(info);
+
+    while (('a' <= ch && ch <= 'z') || ('A' <= ch && ch <= 'Z') || (ch == '_') && i < MAX_STRING_LEN)
+    {
+        buffer[i++] = ch;
+        ch = Bufgetc(info);
+    }
+    buffer[i] = '\0';
+
+    Bufungetc(info);
+
+    Operators op = DefineOperator(buffer);
+    if (op != Operators::UNKNOWN)
+        return _OPT(op);
+
+    int id = FindVariableAmongSaved(expr->vars, buffer);
+
+    if (id == NO_VARIABLE)
+        id = SaveVariable(expr->vars, buffer);
+
+    if (id == NO_VARIABLE)
+    {
+        error->code = (int) ExpressionErrors::INVALID_SYNTAX;
+        return nullptr;
+    }
+    else
+        return _VAR(id);
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+#define DEF_OP(name, symb, ...)                         \
+        if (!strncmp(word, symb, MAX_STRING_LEN))       \
+            return Operators::name;                   \
+        else                                            \
+
+
+static Operators DefineOperator(const char* word)
+{
+    assert(word);
+
+    #include "operations.h"
+
+    /* else */ return Operators::UNKNOWN;
+}
+
+#undef DEF_OP
+
 // -------------------------------------------------------------
 
-static Node* GetNumber(LinesStorage* info)
+static Node* GetNumber(LinesStorage* info, error_t* error)
 {
     assert(info);
 
@@ -170,19 +241,23 @@ static Node* GetNumber(LinesStorage* info)
     double num = strtod(buffer, &end);
 
     if (num == 0 || buffer[0] == '\0')
+    {
+        error->code = (int) ExpressionErrors::INVALID_SYNTAX;
         return nullptr;
+    }
     else
         return _NUM(num);
 }
 
 // ==============================================================
 
-static Node* GetG(Tokens* tokens)
+static Node* GetG(Tokens* tokens, error_t* error)
 {
     assert(tokens);
+    assert(error);
 
-    Node* val = GetE(tokens);
-    syn_assert(TYPE(tokens->buf[tokens->ptr]) == NodeType::OPERATOR &&
+    Node* val = GetE(tokens, error);
+    SYN_ASSERT(TYPE(tokens->buf[tokens->ptr]) == NodeType::OPERATOR &&
                 OPT(tokens->buf[tokens->ptr]) == Operators::END);
 
     return val;
@@ -190,23 +265,27 @@ static Node* GetG(Tokens* tokens)
 
 // -------------------------------------------------------------
 
-static Node* GetN(Tokens* tokens)
+static Node* GetN(Tokens* tokens, error_t* error)
 {
+    assert(tokens);
+    assert(error);
 
     Node* num = tokens->buf[tokens->ptr];
     tokens->ptr++;
 
-    syn_assert(TYPE(num) == NodeType::NUMBER);
+    SYN_ASSERT(TYPE(num) == NodeType::NUMBER || TYPE(num) == NodeType::VARIABLE);
 
     return num;
 }
 
 // -------------------------------------------------------------
 
-static Node* GetE(Tokens* tokens)
+static Node* GetE(Tokens* tokens, error_t* error)
 {
+    assert(tokens);
+    assert(error);
 
-    Node* val = GetT(tokens);
+    Node* val = GetT(tokens, error);
 
     while   (TYPE(tokens->buf[tokens->ptr]) == NodeType::OPERATOR &&
              (OPT(tokens->buf[tokens->ptr]) == Operators::ADD ||
@@ -215,41 +294,30 @@ static Node* GetE(Tokens* tokens)
 
         Node* op = tokens->buf[tokens->ptr];
         tokens->ptr++;
-        Node* val2 = GetT(tokens);
+        Node* val2 = GetT(tokens, error);
 
         val = ConnectNodes(op, val, val2);
-
-        /*switch (OPT(op))
-        {
-            case Operators::ADD:
-                val = _ADD(val, val2);
-                break;
-
-            case Operators::SUB:
-                val = _SUB(val, val2);
-                break;
-
-            default:
-                break;
-        }*/
     }
     return val;
 }
 
 // -------------------------------------------------------------
 
-static Node* GetT(Tokens* tokens)
+static Node* GetT(Tokens* tokens, error_t* error)
 {
-    Node* val = GetP(tokens);
+    assert(error);
+    assert(tokens);
+
+    Node* val = GetS(tokens, error);
 
     while (TYPE(tokens->buf[tokens->ptr]) == NodeType::OPERATOR &&
-             (OPT(tokens->buf[tokens->ptr]) == Operators::DIV ||
-              OPT(tokens->buf[tokens->ptr]) == Operators::MUL))
+           (OPT(tokens->buf[tokens->ptr]) == Operators::DIV ||
+            OPT(tokens->buf[tokens->ptr]) == Operators::MUL))
     {
 
         Node* op = tokens->buf[tokens->ptr];
         tokens->ptr++;
-        Node* val2 = GetP(tokens);
+        Node* val2 = GetS(tokens, error);
 
         val = ConnectNodes(op, val, val2);
     }
@@ -258,17 +326,46 @@ static Node* GetT(Tokens* tokens)
 
 // -------------------------------------------------------------
 
-static Node* GetP(Tokens* tokens)
+static Node* GetS(Tokens* tokens, error_t* error)
 {
+    assert(tokens);
+    assert(error);
+
+    if (TYPE(tokens->buf[tokens->ptr]) == NodeType::OPERATOR &&
+        (OPT(tokens->buf[tokens->ptr]) == Operators::SIN    || OPT(tokens->buf[tokens->ptr]) == Operators::COS    ||
+         OPT(tokens->buf[tokens->ptr]) == Operators::TAN    || OPT(tokens->buf[tokens->ptr]) == Operators::COT    ||
+         OPT(tokens->buf[tokens->ptr]) == Operators::ARCSIN || OPT(tokens->buf[tokens->ptr]) == Operators::ARCCOS ||
+         OPT(tokens->buf[tokens->ptr]) == Operators::ARCTAN || OPT(tokens->buf[tokens->ptr]) == Operators::ARCCOT ||
+         OPT(tokens->buf[tokens->ptr]) == Operators::LN     || OPT(tokens->buf[tokens->ptr]) == Operators::EXP))
+    {
+        Node* op = tokens->buf[tokens->ptr];
+        tokens->ptr++;
+        Node* val = GetP(tokens, error);
+
+        val = ConnectNodes(op, nullptr, val);
+
+        return val;
+    }
+
+    return GetP(tokens, error);
+}
+
+// -------------------------------------------------------------
+
+static Node* GetP(Tokens* tokens, error_t* error)
+{
+    assert(tokens);
+    assert(error);
+
     if (TYPE(tokens->buf[tokens->ptr]) == NodeType::OPERATOR &&
          OPT(tokens->buf[tokens->ptr]) == Operators::OPENING_BRACKET)
     {
         // NodeDtor(tokens->buf[tokens->ptr]);
         // Node* val = _NUM(0);
         tokens->ptr++;
-        Node* val = GetE(tokens);
+        Node* val = GetE(tokens, error);
 
-        syn_assert(TYPE(tokens->buf[tokens->ptr]) == NodeType::OPERATOR &&
+        SYN_ASSERT(TYPE(tokens->buf[tokens->ptr]) == NodeType::OPERATOR &&
                     OPT(tokens->buf[tokens->ptr]) == Operators::CLOSING_BRACKET);
         // NodeDtor(tokens->buf[tokens->ptr]);
         tokens->ptr++;
@@ -276,7 +373,7 @@ static Node* GetP(Tokens* tokens)
         return val;
     }
 
-    return GetN(tokens);
+    return GetN(tokens, error);
 }
 
 // -------------------------------------------------------------

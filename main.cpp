@@ -6,7 +6,7 @@
 #include "common/input_and_output.h"
 #include "common/file_read.h"
 #include "expression/expression.h"
-#include "expression/expr_input_and_output.h"
+#include "expression/expr_output.h"
 #include "expression/expr_input.h"
 #include "calculation.h"
 #include "tex.h"
@@ -40,10 +40,16 @@ int main(const int argc, const char* argv[])
     CreateTextStorage(&info, &error, data_file);
 
     GetExpression(&info, &expr, &error);
-    EXIT_IF_ERROR(&error);
+    EXIT_IF_EXPRESSION_ERROR(&error);
 
     PrintInfixExpression(stdout, &expr);
     DUMP_EXPRESSION(&expr);
+
+    /*UnrealTangent(argc, argv, out_stream, &error);
+
+    UnrealTaylor(argc, argv, out_stream, &error);
+
+    EasyX3Differentiation(argc, argv, out_stream, &error);*/
 
     EndTexFile(out_stream);
     fclose(out_stream);
@@ -62,7 +68,7 @@ void UnrealTangent(const int argc, const char* argv[], FILE* out_stream, error_t
     LinesStorage info = {};
     CreateTextStorage(&info, error, data_file);
 
-    ExpressionInfixRead(&info, &expr, error);
+    GetExpression(&info, &expr, error);
     BREAK_IF_ERROR(error);
 
     PrintSection(out_stream, "Getting superhard tangent");
@@ -89,7 +95,7 @@ void UnrealTaylor(const int argc, const char* argv[], FILE* out_stream, error_t*
     LinesStorage info = {};
     CreateTextStorage(&info, error, data_file);
 
-    ExpressionInfixRead(&info, &expr, error);
+    GetExpression(&info, &expr, error);
     BREAK_IF_ERROR(error);
 
     PrintSection(out_stream, "Getting superhard Taylor series");
@@ -125,7 +131,7 @@ void EasyX3Differentiation(const int argc, const char* argv[], FILE* out_stream,
     LinesStorage info = {};
     CreateTextStorage(&info, error, data_file);
 
-    ExpressionInfixRead(&info, &expr, error);
+    GetExpression(&info, &expr, error);
     BREAK_IF_ERROR(error);
 
     PrintSection(out_stream, "Calculating too easy differentiation");

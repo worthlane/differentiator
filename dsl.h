@@ -52,6 +52,11 @@
 #endif
 #define _VAR(id)   MakeNode(NodeType::VARIABLE, {.var = id}, nullptr, nullptr, nullptr)
 
+#ifdef _OPT
+#undef _OPT
+#endif
+#define _OPT(op)  MakeNode(NodeType::OPERATOR, {.opt = op}, nullptr, nullptr, nullptr)
+
 #define DEF_OP(name, symb, priority, arg_amt, ...)                                                                          \
                     static inline Node* _##name(Node* left = nullptr, Node* right = nullptr)                                          \
                     {                                                                                                       \

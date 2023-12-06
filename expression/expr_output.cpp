@@ -6,7 +6,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-#include "expr_input_and_output.h"
+#include "expr_output.h"
 #include "common/input_and_output.h"
 #include "visual.h"
 
@@ -45,6 +45,10 @@ static void        NodesGnuplotPrint(FILE* fp, const expr_t* expr, const Node* n
 static void        PrintNodeDataType(FILE* fp, const NodeType type);
 
 static bool        CheckBracketsNeededInEquation(const Node* node);
+static bool        CheckLeftBracketsNeededInEquation(const Node* node);
+static bool        CheckRightBracketsNeededInEquation(const Node* node);
+
+
 static void        PutOpeningBracket(FILE* fp, bool need_bracket, bool figure_bracket);
 static void        PutClosingBracket(FILE* fp, bool need_bracket, bool figure_bracket);
 
@@ -283,8 +287,8 @@ void NodesInfixPrint(FILE* fp, const expr_t* expr, const Node* node)
         return;
     }
 
-    bool need_brackets_on_the_left  = CheckBracketsNeededInEquation(node->left);
-    bool need_brackets_on_the_right = CheckBracketsNeededInEquation(node->right);
+    bool need_brackets_on_the_left  = CheckLeftBracketsNeededInEquation(node->left);
+    bool need_brackets_on_the_right = CheckRightBracketsNeededInEquation(node->right);
 
     if (need_brackets_on_the_left) fprintf(fp, "(");
     NodesInfixPrint(fp, expr, node->left);
@@ -415,8 +419,8 @@ static void LatexPrintTwoArgumentsOperation(FILE* fp, const expr_t* expr, const 
     assert(expr);
     assert(node);
 
-    bool need_brackets_on_the_left  = (need_left_brackets  || CheckBracketsNeededInEquation(node->left));
-    bool need_brackets_on_the_right = (need_right_brackets || CheckBracketsNeededInEquation(node->right));
+    bool need_brackets_on_the_left  = (need_left_brackets  || CheckLeftBracketsNeededInEquation(node->left));
+    bool need_brackets_on_the_right = (need_right_brackets || CheckRightBracketsNeededInEquation(node->right));
 
     if (type == LatexOperationTypes::PREFIX)
         fprintf(fp, "%s", opt);
@@ -448,8 +452,8 @@ static void LatexPrintOneArgumentOperation(FILE* fp, const expr_t* expr, const N
     assert(expr);
     assert(node);
 
-    bool need_brackets_on_the_left  = (need_left_brackets  || CheckBracketsNeededInEquation(node->left));
-    bool need_brackets_on_the_right = (need_right_brackets || CheckBracketsNeededInEquation(node->right));
+    bool need_brackets_on_the_left  = (need_left_brackets  || CheckLeftBracketsNeededInEquation(node->left));
+    bool need_brackets_on_the_right = (need_right_brackets || CheckRightBracketsNeededInEquation(node->right));
 
     if (type == LatexOperationTypes::PREFIX)
     {
@@ -510,6 +514,58 @@ static bool CheckBracketsNeededInEquation(const Node* node)
     int parent_priority = GetOperationPriority(node->parent->value.opt);
 
     if (kid_priority < parent_priority)
+        return true;
+
+    if (kid_priority == parent_priority && node->value.opt == Operators::DEG)
+        return true;
+
+    return false;
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+static bool CheckLeftBracketsNeededInEquation(const Node* node)
+{
+    if (!node) return false;
+
+    if (node->type != NodeType::OPERATOR)
+    {
+        if (node->parent->left == nullptr)
+            return true;
+        else
+            return false;
+    }
+
+    int kid_priority    = GetOperationPriority(node->value.opt);
+    int parent_priority = GetOperationPriority(node->parent->value.opt);
+
+    if (kid_priority < parent_priority)
+        return true;
+
+    if (kid_priority == parent_priority && node->value.opt == Operators::DEG)
+        return true;
+
+    return false;
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+static bool CheckRightBracketsNeededInEquation(const Node* node)
+{
+    if (!node) return false;
+
+    if (node->type != NodeType::OPERATOR)
+    {
+        if (node->parent->left == nullptr)
+            return true;
+        else
+            return false;
+    }
+
+    int kid_priority    = GetOperationPriority(node->value.opt);
+    int parent_priority = GetOperationPriority(node->parent->value.opt);
+
+    if (kid_priority <= parent_priority)
         return true;
 
     if (kid_priority == parent_priority && node->value.opt == Operators::DEG)

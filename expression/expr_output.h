@@ -1,5 +1,5 @@
-#ifndef __EXPR_INPUT_AND_OUTPUT_H_
-#define __EXPR_INPUT_AND_OUTPUT_H_
+#ifndef __EXPR_OUTPUT_H_
+#define __EXPR_OUTPUT_H_
 
 #include "expression.h"
 

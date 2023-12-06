@@ -3,7 +3,7 @@
 
 #include "expression.h"
 
-static const int MAX_TOKENS_AMT = 9999;
+static const int MAX_TOKENS_AMT = 1000;
 
 struct Tokens
 {

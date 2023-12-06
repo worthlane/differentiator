@@ -3,7 +3,7 @@
 
 #include "calculation.h"
 #include "expression/visual.h"
-#include "expression/expr_input_and_output.h"
+#include "expression/expr_output.h"
 #include "common/input_and_output.h"
 #include "tex.h"
 #include "dsl.h"

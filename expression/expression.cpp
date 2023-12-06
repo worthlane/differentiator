@@ -362,7 +362,7 @@ int PrintExpressionError(FILE* fp, const void* err, const char* func, const char
             return (int) error->code;
 
         case (ExpressionErrors::INVALID_SYNTAX):
-            fprintf(fp, "UNKNOWN INPUT<br>\n");
+            fprintf(fp, "INVALID SYNTAX<br>\n");
             LOG_END();
             return (int) error->code;
 
